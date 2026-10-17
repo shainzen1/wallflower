@@ -1,0 +1,67 @@
+name: Bug report
+description: Something in Wallflower doesn't work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please leave out session names, prompts and transcript content you'd rather keep private.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: And what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a session in the Claude app
+        2. Hover its face
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Apple menu > About This Mac.
+      placeholder: "26.1"
+    validations:
+      required: true
+  - type: input
+    id: wallflower-version
+    attributes:
+      label: Wallflower version
+      description: Settings > About.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: claude-code-version
+    attributes:
+      label: Claude Code version
+      description: Run `claude --version` in a terminal, or check the Claude app's About window.
+      placeholder: "2.1.295"
+    validations:
+      required: true
+  - type: dropdown
+    id: session-source
+    attributes:
+      label: Where do the affected sessions run?
+      options:
+        - Claude desktop app
+        - Terminal or editor
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: |
+        Optional. Recent logs: `log show --last 5m --predicate 'subsystem == "dev.wallflower.Wallflower"'`.
+        Check for anything private before you paste.
+      render: text

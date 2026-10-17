@@ -1,0 +1,32 @@
+name: Feature request
+description: An idea that would make Wallflower more useful.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Wallflower stays small and quiet on purpose: no CPU at rest, no network, nothing that demands attention it doesn't need. Ideas that fit that spirit are the easiest to say yes to.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve?
+      description: What were you trying to do, and what got in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you submit
+      options:
+        - label: I searched the existing issues and this isn't one of them.
+          required: true

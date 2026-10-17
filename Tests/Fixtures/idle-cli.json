@@ -1,0 +1,24 @@
+{
+  "pid": 15699,
+  "sessionId": "ab9781e7-8702-480d-9f78-c28cb1701c7d",
+  "cwd": "/Users/demo/Developer/project-d",
+  "startedAt": 1791884209864,
+  "procStart": "Tue Oct 13 09:36:49 2026",
+  "version": "2.1.287",
+  "peerProtocol": 1,
+  "peerFeatures": [
+    "notify_idle",
+    "reply_across_default_dirs",
+    "artifact_yield"
+  ],
+  "kind": "interactive",
+  "entrypoint": "sdk-cli",
+  "pidDomain": "darwin",
+  "messagingSocketPath": "/tmp/cc-demo4/ddddd.sock",
+  "name": "Summarise release notes",
+  "nameSource": "derived",
+  "nameSince": 1791884209864,
+  "status": "idle",
+  "updatedAt": 1791884211883,
+  "statusUpdatedAt": 1791884211883
+}

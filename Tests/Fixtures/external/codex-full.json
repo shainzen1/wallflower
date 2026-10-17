@@ -1,0 +1,13 @@
+{
+  "id": "codex-7f3a",
+  "tool": "codex",
+  "name": "Port the parser",
+  "cwd": "/Users/demo/Developer/project-e",
+  "status": "waiting",
+  "waitingFor": "permission",
+  "pid": 15702,
+  "updatedAt": 1791884300000,
+  "statusUpdatedAt": 1791884290000,
+  "startedAt": 1791884000000,
+  "open": { "url": "https://example.com/sessions/codex-7f3a" }
+}

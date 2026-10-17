@@ -1,0 +1,38 @@
+{
+  "pid": 70461,
+  "sessionId": "8d7fd052-5936-4c1a-9b92-0427cef1ad2c",
+  "cwd": "/Users/demo/Developer/project-c",
+  "startedAt": 1791875323297,
+  "procStart": "Tue Oct 13 07:08:42 2026",
+  "version": "2.1.295",
+  "peerProtocol": 1,
+  "peerFeatures": [
+    "notify_idle",
+    "reply_across_default_dirs",
+    "artifact_yield"
+  ],
+  "kind": "interactive",
+  "entrypoint": "claude-desktop",
+  "hostSessionId": "local_54ebfa84-ef42-43b8-9bb8-1e5392b286bf",
+  "pidDomain": "darwin",
+  "messagingSocketPath": "/tmp/cc-demo3/ccccc.sock",
+  "name": "Migrate search index",
+  "nameSource": "user",
+  "nameSince": 1791883299742,
+  "status": "waiting",
+  "updatedAt": 1791884247734,
+  "statusUpdatedAt": 1791884247734,
+  "formerNames": [
+    {
+      "name": "Earlier title 1",
+      "until": 1791883299742,
+      "sessionId": "d271379f-3377-4a45-9cce-a64be194744d"
+    },
+    {
+      "name": "Earlier title 2",
+      "until": 1791875919636,
+      "sessionId": "56f92012-9292-43db-b0c3-40ac5052dbcc"
+    }
+  ],
+  "waitingFor": "permission prompt"
+}

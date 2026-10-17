@@ -1,0 +1,11 @@
+{
+  "id": "gemini-42",
+  "tool": "gemini",
+  "cwd": "/Users/demo/Developer/project-f",
+  "status": "idle",
+  "pid": "not a number",
+  "updatedAt": 1791884400000,
+  "open": { "app": "com.example.Terminal", "colour": "teal" },
+  "model": "some-model",
+  "tokens": { "in": 12, "out": 34 }
+}

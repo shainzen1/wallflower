@@ -1,0 +1,202 @@
+#!/bin/bash
+# wallflower-session: write, update and remove a Wallflower external session file.
+#
+# Any tool can show up in Wallflower's capsule by keeping one JSON file per session in
+# ~/Library/Application Support/Wallflower/sessions/ (docs/external-sessions.md). This script
+# writes those files so a hook or a wrapper script needs no JSON of its own. Plain bash 3.2,
+# sed and date: nothing to install.
+#
+#   wallflower-session start  --id ID [--tool NAME] [--name TEXT] [--cwd DIR] [--pid PID]
+#                             [--status busy|idle|waiting] [--waiting-for question|permission]
+#                             [--open-url URL | --open-app BUNDLE_ID | --open-command COMMAND]
+#   wallflower-session status --id ID busy|idle|waiting [--waiting-for question|permission]
+#   wallflower-session touch  --id ID
+#   wallflower-session end    --id ID
+#   wallflower-session path   [--id ID]
+#
+# --id defaults to $WALLFLOWER_SESSION_ID, so a wrapper can export it once and the hooks its tool
+# runs (child processes) only say what changed: wallflower-session status busy.
+#
+# WALLFLOWER_SESSIONS_DIR overrides the folder (tests, or a second Wallflower started with
+# --external-sessions-folder). Files are replaced atomically (written to a hidden temp file in the
+# same folder, then renamed), so Wallflower never reads half a file.
+#
+# status, touch and end only work on files this script wrote: it reads its own one-key-per-line
+# layout back and does not parse arbitrary JSON.
+
+set -u
+
+usage() {
+    sed -n '9,15p' "$0" | sed 's/^# \{0,1\}//' >&2
+    exit 2
+}
+
+fail() {
+    printf 'wallflower-session: %s\n' "$1" >&2
+    exit 1
+}
+
+folder="${WALLFLOWER_SESSIONS_DIR:-$HOME/Library/Application Support/Wallflower/sessions}"
+
+# Epoch milliseconds (macOS date has no %N; second precision is plenty here).
+now_ms() {
+    printf '%s000' "$(date +%s)"
+}
+
+# A JSON string literal: backslash, quote, tab, CR and newline escaped, other control characters dropped.
+json_string() {
+    printf '"'
+    printf '%s' "$1" \
+        | LC_ALL=C tr -d '\000-\010\013\014\016-\037' \
+        | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e "s/$(printf '\t')/\\\\t/g" -e "s/$(printf '\r')/\\\\r/g" \
+        | LC_ALL=C awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }'
+    printf '"'
+}
+
+# Ids become file names: letters, digits, dot, dash and underscore, not starting with a dot.
+valid_id() {
+    case "$1" in
+        '' | .* | *[!A-Za-z0-9._-]*) return 1 ;;
+    esac
+    [ "${#1}" -le 128 ]
+}
+
+valid_status() {
+    case "$1" in busy | idle | waiting) return 0 ;; esac
+    return 1
+}
+
+# The fields of one session, as raw JSON values ("" means absent).
+v_id='' v_tool='' v_name='' v_cwd='' v_status='' v_waitingFor='' v_pid='' v_startedAt='' v_updatedAt='' v_statusUpdatedAt='' v_open=''
+
+# Writes the fields, one key per line, to the session file through a temp file and a rename.
+write_file() {
+    mkdir -p "$folder" || fail "cannot create $folder"
+    local target="$folder/$id.json"
+    local temp="$folder/.$id.json.tmp.$$"
+    {
+        printf '{\n'
+        local first=1 key value
+        for key in id tool name cwd status waitingFor pid startedAt updatedAt statusUpdatedAt open; do
+            eval "value=\${v_$key}"
+            [ -n "$value" ] || continue
+            [ "$first" = 1 ] || printf ',\n'
+            first=0
+            printf '  "%s": %s' "$key" "$value"
+        done
+        printf '\n}\n'
+    } >"$temp" || { rm -f "$temp"; fail "cannot write $temp"; }
+    mv -f "$temp" "$target" || { rm -f "$temp"; fail "cannot replace $target"; }
+}
+
+# Reads a file this script wrote back into the v_ fields.
+read_file() {
+    local file="$folder/$id.json" line key value
+    [ -f "$file" ] || fail "no session '$id' in $folder (run start first)"
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            '  "'*'": '*) ;;
+            *) continue ;;
+        esac
+        key="${line#  \"}"
+        key="${key%%\"*}"
+        value="${line#*\": }"
+        value="${value%,}"
+        case "$key" in
+            id | tool | name | cwd | status | waitingFor | pid | startedAt | updatedAt | statusUpdatedAt | open)
+                eval "v_$key=\$value" ;;
+        esac
+    done <"$file"
+}
+
+[ $# -ge 1 ] || usage
+command="$1"
+shift
+case "$command" in -h | --help | help) usage ;; esac
+
+id="${WALLFLOWER_SESSION_ID:-}"
+status=''
+waiting_for=''
+tool='' name='' cwd='' pid='' open_url='' open_app='' open_command=''
+open_count=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --id) [ $# -ge 2 ] || usage; id="$2"; shift 2 ;;
+        --tool) [ $# -ge 2 ] || usage; tool="$2"; shift 2 ;;
+        --name) [ $# -ge 2 ] || usage; name="$2"; shift 2 ;;
+        --cwd) [ $# -ge 2 ] || usage; cwd="$2"; shift 2 ;;
+        --pid) [ $# -ge 2 ] || usage; pid="$2"; shift 2 ;;
+        --status) [ $# -ge 2 ] || usage; status="$2"; shift 2 ;;
+        --waiting-for) [ $# -ge 2 ] || usage; waiting_for="$2"; shift 2 ;;
+        --open-url) [ $# -ge 2 ] || usage; open_url="$2"; open_count=$((open_count + 1)); shift 2 ;;
+        --open-app) [ $# -ge 2 ] || usage; open_app="$2"; open_count=$((open_count + 1)); shift 2 ;;
+        --open-command) [ $# -ge 2 ] || usage; open_command="$2"; open_count=$((open_count + 1)); shift 2 ;;
+        -h | --help) usage ;;
+        busy | idle | waiting) status="$1"; shift ;;
+        *) fail "unknown argument: $1" ;;
+    esac
+done
+
+if [ "$command" = path ]; then
+    if [ -n "$id" ]; then printf '%s/%s.json\n' "$folder" "$id"; else printf '%s\n' "$folder"; fi
+    exit 0
+fi
+
+[ -n "$id" ] || fail "--id is required (or set WALLFLOWER_SESSION_ID)"
+valid_id "$id" || fail "invalid id '$id' (letters, digits, '.', '-', '_'; not starting with '.'; at most 128)"
+[ -z "$status" ] || valid_status "$status" || fail "status must be busy, idle or waiting, not '$status'"
+case "$waiting_for" in '' | question | permission) ;; *) fail "--waiting-for must be question or permission" ;; esac
+
+case "$command" in
+    start)
+        [ "$open_count" -le 1 ] || fail "give at most one of --open-url, --open-app, --open-command"
+        case "$pid" in '') ;; *[!0-9]* | 0) fail "--pid must be a process id" ;; esac
+        now="$(now_ms)"
+        v_id="$(json_string "$id")"
+        [ -z "$tool" ] || v_tool="$(json_string "$tool")"
+        [ -z "$name" ] || v_name="$(json_string "$name")"
+        [ -z "$cwd" ] || v_cwd="$(json_string "$cwd")"
+        v_status="$(json_string "${status:-idle}")"
+        [ "${status:-idle}" != waiting ] || [ -z "$waiting_for" ] || v_waitingFor="$(json_string "$waiting_for")"
+        v_pid="$pid"
+        v_startedAt="$now"
+        v_updatedAt="$now"
+        v_statusUpdatedAt="$now"
+        if [ -n "$open_url" ]; then
+            v_open="{\"url\": $(json_string "$open_url")}"
+        elif [ -n "$open_app" ]; then
+            v_open="{\"app\": $(json_string "$open_app")}"
+        elif [ -n "$open_command" ]; then
+            v_open="{\"command\": $(json_string "$open_command")}"
+        fi
+        write_file
+        ;;
+    status)
+        [ -n "$status" ] || fail "status needs busy, idle or waiting"
+        read_file
+        now="$(now_ms)"
+        new_status="$(json_string "$status")"
+        new_waiting=''
+        [ "$status" != waiting ] || [ -z "$waiting_for" ] || new_waiting="$(json_string "$waiting_for")"
+        # The status clock only restarts when the status itself changes.
+        if [ "$new_status" != "$v_status" ] || [ "$new_waiting" != "$v_waitingFor" ]; then
+            v_statusUpdatedAt="$now"
+        fi
+        v_status="$new_status"
+        v_waitingFor="$new_waiting"
+        v_updatedAt="$now"
+        write_file
+        ;;
+    touch)
+        read_file
+        v_updatedAt="$(now_ms)"
+        write_file
+        ;;
+    end)
+        rm -f "$folder/$id.json"
+        ;;
+    *)
+        usage
+        ;;
+esac

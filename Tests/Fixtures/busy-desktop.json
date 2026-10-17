@@ -1,0 +1,25 @@
+{
+  "pid": 11375,
+  "sessionId": "00201048-7851-424f-a243-db4c8332cd9a",
+  "cwd": "/Users/demo/Developer/project-a",
+  "startedAt": 1791883748274,
+  "procStart": "Tue Oct 13 09:29:07 2026",
+  "version": "2.1.295",
+  "peerProtocol": 1,
+  "peerFeatures": [
+    "notify_idle",
+    "reply_across_default_dirs",
+    "artifact_yield"
+  ],
+  "kind": "interactive",
+  "entrypoint": "claude-desktop",
+  "hostSessionId": "local_18047a35-9e7f-4128-944c-859e724cb179",
+  "pidDomain": "darwin",
+  "messagingSocketPath": "/tmp/cc-demo1/aaaaa.sock",
+  "name": "Refactor billing hooks",
+  "nameSource": "user",
+  "nameSince": 1791883748364,
+  "status": "busy",
+  "updatedAt": 1791883748364,
+  "statusUpdatedAt": 1791883748275
+}

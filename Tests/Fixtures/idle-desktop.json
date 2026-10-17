@@ -1,0 +1,25 @@
+{
+  "pid": 78068,
+  "sessionId": "934ce6fb-1fea-4b8d-8e8e-a4050c3f5ab3",
+  "cwd": "/Users/demo/Developer/project-b",
+  "startedAt": 1791879441228,
+  "procStart": "Tue Oct 13 08:17:20 2026",
+  "version": "2.1.295",
+  "peerProtocol": 1,
+  "peerFeatures": [
+    "notify_idle",
+    "reply_across_default_dirs",
+    "artifact_yield"
+  ],
+  "kind": "interactive",
+  "entrypoint": "claude-desktop",
+  "hostSessionId": "local_93928bc1-635f-4580-9c90-29b1bc783406",
+  "pidDomain": "darwin",
+  "messagingSocketPath": "/tmp/cc-demo2/bbbbb.sock",
+  "name": "Fix onboarding layout",
+  "nameSource": "user",
+  "nameSince": 1791879441381,
+  "status": "idle",
+  "updatedAt": 1791883364497,
+  "statusUpdatedAt": 1791883364497
+}

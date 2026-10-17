@@ -1,0 +1,9 @@
+{
+  "id": "opencode-9",
+  "tool": "opencode",
+  "name": "Write the release notes",
+  "cwd": "/Users/demo/Developer/project-g",
+  "status": "busy",
+  "updatedAt": 1791884500000,
+  "open": { "command": "tmux attach -t 'opencode 9'" }
+}
