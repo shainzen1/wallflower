@@ -23,9 +23,9 @@ struct BlobHalo: Equatable, Sendable {
     /// The mint halo of a face that just finished, breathing.
     static let done = BlobHalo(color: Theme.justFinishedColor, opacity: Theme.doneHaloOpacity, restFraction: Theme.doneHaloPulse.scale, breath: Theme.doneHaloPulse)
 
-    /// The quieter halo of a face whose turn ended (waiting for the next instruction): the body's own
-    /// colour (`Theme.yourTurnColor` in `.status` colour mode, the project or identity colour in the
-    /// others) at a lower opacity than the done halo, on the same breath.
+    /// The halo of a face whose turn ended (waiting for the next instruction): the body's colour,
+    /// `Theme.yourTurnColor` in every colour mode, at `Theme.yourTurnHaloOpacity` (louder than the done
+    /// halo, below the amber one), on the done halo's breath.
     static func yourTurn(color: EyeColor) -> BlobHalo {
         BlobHalo(color: color, opacity: Theme.yourTurnHaloOpacity, restFraction: Theme.yourTurnHaloPulse.scale, breath: Theme.yourTurnHaloPulse)
     }

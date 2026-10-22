@@ -22,7 +22,7 @@ struct ProjectColorModeTests {
         return hue < 0 ? hue + 360 : hue
     }
 
-    @Test("The palette has 10 to 12 vivid hues, none amber-like, and the mode is the default")
+    @Test("The palette has 10 to 12 vivid hues, none amber- or lime-like, and the mode is the default")
     func palette() {
         #expect(Theme.colorMode == .project)
         #expect(Theme.ColorMode.allCases == [.status, .identity, .project])
@@ -31,14 +31,17 @@ struct ProjectColorModeTests {
         let actionHue = Self.hue(Theme.actionColor)
         #expect(amberHue > 25 && amberHue < 45)
         #expect(actionHue > 240 && actionHue < 275, "lavender")
+        let limeHue = Self.hue(Theme.yourTurnColor)
+        #expect(limeHue > 75 && limeHue < 100, "the your-turn lime at \(Int(limeHue)) degrees")
         for color in Theme.projectPalette {
             let maxChannel = max(color.red, color.green, color.blue)
             let minChannel = min(color.red, color.green, color.blue)
             #expect(maxChannel >= 0.84, "\(color.name) is bright enough on black")
             #expect(maxChannel - minChannel >= 0.4, "\(color.name) is saturated")
             let hue = Self.hue(color)
-            // Orange, amber, yellow and lime: the wedge from 20 to 120 degrees stays empty.
-            #expect(hue < 20 || hue > 120, "\(color.name) at \(Int(hue)) degrees is amber-like")
+            // Orange, amber, yellow, the your-turn lime and plain green: the wedge from 20 to 140 degrees stays empty.
+            #expect(hue < 20 || hue > 140, "\(color.name) at \(Int(hue)) degrees is amber- or lime-like")
+            #expect(abs(hue - limeHue) > 50, "\(color.name) at \(Int(hue)) degrees is close to the your-turn lime")
             #expect(abs(hue - actionHue) > 15, "\(color.name) at \(Int(hue)) degrees sits on the action lavender")
         }
         let keys = ProjectColor.sampleKeys(count: 5)
@@ -46,12 +49,23 @@ struct ProjectColorModeTests {
         #expect(ProjectColor.sampleKeys(count: 100).count == Theme.projectPalette.count, "capped at the palette")
     }
 
-    @Test("Body colour per status: amber waiting, project working and finished, dimmed idle, grey ended")
+    @Test("No identity colour sits on the your-turn lime")
+    func identityPalettesAvoidLime() {
+        let limeHue = Self.hue(Theme.yourTurnColor)
+        for color in Theme.blobPalette + Theme.eyePalette {
+            let saturation = max(color.red, color.green, color.blue) - min(color.red, color.green, color.blue)
+            guard saturation > 0.15 else { continue }
+            #expect(abs(Self.hue(color) - limeHue) > 40, "\(color.name) at \(Int(Self.hue(color))) degrees")
+        }
+    }
+
+    @Test("Body colour per status: amber waiting, lime your turn, project working and finished, dimmed idle, grey ended")
     func statusMapping() {
         let project = ProjectColor.color(for: key)
         #expect(ProjectColor.color(for: .needsInput(kind: .question), projectKey: key) == Theme.needsInputColor)
         #expect(ProjectColor.color(for: .working, projectKey: key) == project)
         #expect(ProjectColor.color(for: .justFinished, projectKey: key) == project)
+        #expect(ProjectColor.color(for: .yourTurn(since: Date()), projectKey: key) == Theme.yourTurnColor)
         #expect(ProjectColor.color(for: .idle(since: Date()), projectKey: key) == project.dimmed(Theme.projectIdleDim))
         #expect(ProjectColor.color(for: .ended, projectKey: key) == Theme.endedColor)
         let dim = project.dimmed(Theme.projectIdleDim)

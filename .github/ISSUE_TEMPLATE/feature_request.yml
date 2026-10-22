@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Wallflower stays small and quiet on purpose: no CPU at rest, no network, nothing that demands attention it doesn't need. Ideas that fit that spirit are the easiest to say yes to.
+        Wallflower stays small and quiet on purpose: no CPU at rest, no network beyond a weekly update check, nothing that demands attention it doesn't need. Ideas that fit that spirit are the easiest to say yes to.
   - type: textarea
     id: problem
     attributes:

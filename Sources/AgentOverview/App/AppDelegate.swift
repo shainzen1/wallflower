@@ -23,6 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var settings: AppSettings!
     /// "Launch at login", shared by Settings, the welcome and `--set`.
     private let launchAtLogin = LaunchAtLogin()
+    /// In-app updates (Sparkle), shared by the menu and Settings.
+    private(set) var updater: AppUpdater!
     /// What the panel content was last built with; a settings change rebuilds only when these differ.
     private var appliedLook = PanelLook.themeDefault
     private var appliedSource = SessionSource.desktop
@@ -56,6 +58,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appliedSide = settings.panelSide
         appliedExternalSessions = settings.externalSessions
         appliedLook.applyToFaceLook()
+
+        let updater = AppUpdater(start: arguments.runsUpdater, relaunches: arguments.defaultsSuite == nil)
+        self.updater = updater
 
         let store = makeStore(for: appliedSource)
         let actionStore = ActionStore(fileURL: arguments.actionsFile ?? ActionStore.defaultFileURL)
@@ -103,7 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isPanelVisible: { [weak self] in self?.panel?.isHiddenByUser == false },
             resetPosition: { [weak self] in self?.resetPosition() },
             openSettings: { [weak self] in self?.openSettings() },
-            showWelcome: { [weak self] in self?.showWelcome() }
+            showWelcome: { [weak self] in self?.showWelcome() },
+            updateTitle: { [weak self] in AppUpdater.menuTitle(pendingVersion: self?.updater.pendingVersion) },
+            canCheckForUpdates: { [weak self] in self?.updater.canCheckForUpdates == true },
+            checkForUpdates: { [weak self] in self?.updater.checkForUpdates() }
         ))
         self.menuBar = menuBar
         menuBar.observe()
@@ -113,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openPlayground()
         }
         openLaunchWindows()
+        runScriptedUpdateCheck()
     }
 
     // MARK: Panel content
@@ -256,7 +265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func openSettings(tab: SettingsTab? = nil) {
         if settingsWindow == nil {
             let controller = SettingsWindowController(
-                settings: settings, launchAtLogin: launchAtLogin, actions: settingsActions, actionStore: actionStore,
+                settings: settings, launchAtLogin: launchAtLogin, updater: updater, actions: settingsActions, actionStore: actionStore,
                 tab: tab ?? .general,
                 showsAdvanced: arguments.settingsAdvanced
             )
@@ -426,6 +435,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             NSLog("\(AppInfo.name): welcome keys: onboarding done %d", self?.settings.hasCompletedOnboarding == true ? 1 : 0)
             NSApp.terminate(nil)
+        }
+    }
+
+    // MARK: `--check-for-updates`
+
+    /// Starts the `--check-for-updates` check a second after launch, once Sparkle has settled.
+    private func runScriptedUpdateCheck() {
+        guard let check = arguments.checkForUpdates else { return }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard let self else { return }
+            NSLog("\(AppInfo.name): --check-for-updates %@ (updater running: %d)", check.rawValue, self.updater.isRunning ? 1 : 0)
+            switch check {
+            case .ui: self.updater.checkForUpdates()
+            case .background: self.updater.checkInBackground()
+            }
         }
     }
 

@@ -19,21 +19,43 @@ final class ActionEditorModel {
         var cwd: String
         var prompt: String
         var days: [String]?
+        /// The Model picker.
+        var modelChoice: ModelChoice
+        /// The text field "Custom…" reveals; only stored while `modelChoice` is `.custom`.
+        var customModel: String
+        /// `effort` as in the file: an unknown value is kept until the Effort picker changes it.
+        var effort: String?
 
         /// A blank new action. The folder starts at the home folder, which always exists.
         static let blank = Draft(id: nil, name: "", cwd: "~", prompt: "", days: nil)
 
-        init(id: String?, name: String, cwd: String, prompt: String, days: [String]?) {
+        init(
+            id: String?, name: String, cwd: String, prompt: String, days: [String]?, modelChoice: ModelChoice = .standard,
+            customModel: String = "", effort: String? = nil
+        ) {
             self.id = id
             self.name = name
             self.cwd = cwd
             self.prompt = prompt
             self.days = days
+            self.modelChoice = modelChoice
+            self.customModel = customModel
+            self.effort = effort
         }
 
         init(_ item: ActionItem) {
-            self.init(id: item.id, name: item.name, cwd: item.cwd, prompt: item.prompt, days: item.days)
+            let choice = ModelChoice(model: item.model)
+            self.init(
+                id: item.id, name: item.name, cwd: item.cwd, prompt: item.prompt, days: item.days, modelChoice: choice,
+                customModel: choice == .custom ? item.model ?? "" : "", effort: item.effort
+            )
         }
+
+        /// The `model` value these pickers store: nil for Default and for a blank custom id.
+        var model: String? { modelChoice.storedModel(custom: customModel) }
+
+        /// The Effort picker's value; an unknown or missing `effort` shows as Default.
+        var effortChoice: ClaudeEffort? { ClaudeEffort(parsing: effort) }
 
         var isNew: Bool { id == nil }
 
@@ -43,18 +65,60 @@ final class ActionEditorModel {
         }
 
         /// `item` with these fields, trimmed. Everything the editor does not show (`seed`, `symbol`,
-        /// `shape`, `color`) is kept.
+        /// `shape`, `color`) is kept, and so is an unknown `effort` the picker was not changed for.
         func applied(to item: ActionItem) -> ActionItem {
             var item = item
             item.name = Self.trimmed(name)
             item.cwd = Self.trimmed(cwd)
             item.prompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
             item.days = ActionSchedule.storedDays(ActionSchedule.enabledDays(days))
+            item.model = model
+            item.effort = effort
             return item
         }
 
         static func trimmed(_ text: String) -> String {
             text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    /// The Model picker of the sheet: Default (no `--model`), the CLI's aliases, or a custom model id.
+    enum ModelChoice: String, CaseIterable, Identifiable, Sendable {
+        case standard, fable, opus, sonnet, haiku, custom
+
+        var id: Self { self }
+
+        /// The aliases, in picker order.
+        static let aliases: [ModelChoice] = [.fable, .opus, .sonnet, .haiku]
+
+        /// The choice that shows `model`: Default when nil or blank, an alias when it is exactly one
+        /// (trimmed), Custom for anything else.
+        init(model: String?) {
+            let trimmed = model?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if trimmed.isEmpty {
+                self = .standard
+            } else {
+                self = Self.aliases.first { $0.rawValue == trimmed } ?? .custom
+            }
+        }
+
+        /// The `model` value to store: nil for Default, the alias, or the custom id trimmed (nil when blank).
+        func storedModel(custom: String) -> String? {
+            switch self {
+            case .standard: return nil
+            case .custom:
+                let trimmed = custom.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            default: return rawValue
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .standard: "Default"
+            case .custom: "Custom…"
+            default: rawValue.prefix(1).uppercased() + rawValue.dropFirst()
+            }
         }
     }
 
@@ -64,8 +128,31 @@ final class ActionEditorModel {
         var name: String
         /// The folder and the first line of the prompt.
         var detail: String
-        /// "Every day" or the day names.
-        var days: String
+        /// "Every day" or the day names, then the model and effort when set ("Fri · Sonnet, high").
+        var caption: String
+    }
+
+    /// Under the model fields while actions run in the Claude app, whose link cannot pick a model.
+    static let claudeAppModelNote = "The Claude app ignores these; they apply when actions run in Terminal."
+
+    /// The note under the sheet's model fields for `launcher`: nil for Terminal, which passes them on.
+    static func modelNote(for launcher: Theme.ActionLauncher) -> String? {
+        launcher == .terminalCommand ? nil : claudeAppModelNote
+    }
+
+    /// The model and effort of `item` for its list row ("Sonnet, high", "Sonnet", "high effort"), nil
+    /// when neither is set. An alias shows by its title, a custom id as is; an unknown effort not at all.
+    static func launchCaption(for item: ActionItem) -> String? {
+        let model = item.launchModel.map { model in
+            ModelChoice.aliases.first { $0.rawValue == model }?.title ?? model
+        }
+        let effort = item.launchEffort.map { $0.title.lowercased() }
+        switch (model, effort) {
+        case let (model?, effort?): return "\(model), \(effort)"
+        case let (model?, nil): return model
+        case let (nil, effort?): return "\(effort) effort"
+        case (nil, nil): return nil
+        }
     }
 
     let store: ActionStore
@@ -108,7 +195,7 @@ final class ActionEditorModel {
             id: item.id,
             name: name.isEmpty ? untitled : name,
             detail: [item.cwd, promptPreview(item.prompt)].filter { !$0.isEmpty }.joined(separator: "  ·  "),
-            days: ActionSchedule.caption(item.days)
+            caption: [ActionSchedule.caption(item.days), launchCaption(for: item)].compactMap { $0 }.joined(separator: " · ")
         )
     }
 
@@ -176,6 +263,23 @@ final class ActionEditorModel {
     func setName(_ name: String) { edit { $0.name = name } }
     func setFolder(_ cwd: String) { edit { $0.cwd = cwd } }
     func setPrompt(_ prompt: String) { edit { $0.prompt = prompt } }
+
+    /// The Model picker. Custom keeps the alias that was picked as its text, so nothing changes until
+    /// the text does.
+    func setModelChoice(_ choice: ModelChoice) {
+        edit { draft in
+            if choice == .custom, Draft.trimmed(draft.customModel).isEmpty, ModelChoice.aliases.contains(draft.modelChoice) {
+                draft.customModel = draft.modelChoice.rawValue
+            }
+            draft.modelChoice = choice
+        }
+    }
+
+    /// The custom model id field.
+    func setCustomModel(_ text: String) { edit { $0.customModel = text } }
+
+    /// The Effort picker; nil is Default.
+    func setEffort(_ effort: ClaudeEffort?) { edit { $0.effort = effort?.rawValue } }
 
     /// Flips one weekday; the last day that is on stays on (`ActionSchedule.toggling`).
     func toggleDay(_ key: String) {
@@ -320,6 +424,19 @@ final class ActionEditorModel {
             saveError = error.localizedDescription
             NSLog("%@: could not save actions.json: %@", AppInfo.name, error.localizedDescription)
             return false
+        }
+    }
+}
+
+extension ClaudeEffort {
+    /// Label in the sheet's Effort picker.
+    var title: String {
+        switch self {
+        case .low: "Low"
+        case .medium: "Medium"
+        case .high: "High"
+        case .xhigh: "Extra high"
+        case .max: "Max"
         }
     }
 }

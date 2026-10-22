@@ -65,6 +65,49 @@ struct ActionItemTests {
         #expect(try String(contentsOf: file, encoding: .utf8) == ActionLaunch.commandScript(for: item))
     }
 
+    @Test("File format: model and effort round-trip and are omitted when nil")
+    func modelAndEffortFormat() throws {
+        let tuned = ActionItem(id: "log", name: "Log", cwd: "~/notes", prompt: "/log", model: "sonnet", effort: "high")
+        let text = String(decoding: try ActionItem.encode([.standup, tuned]), as: UTF8.self)
+        #expect(text.components(separatedBy: "\"model\"").count == 2 && text.components(separatedBy: "\"effort\"").count == 2,
+                "only the tuned item carries them")
+        #expect(text.contains("\"cwd\" : \"~/notes\",\n    \"effort\" : \"high\",\n    \"id\" : \"log\",\n    \"model\" : \"sonnet\","), "sorted keys")
+        #expect(try ActionItem.decode(Data(text.utf8)) == [.standup, tuned])
+
+        let plain = String(decoding: try ActionItem.encode([.standup]), as: UTF8.self)
+        #expect(!plain.contains("model") && !plain.contains("effort"), "nil fields are not written")
+        #expect(try ActionItem.decode(Data(plain.utf8)) == [.standup])
+
+        let decoded = try ActionItem.decode(Data(#"[{"id": "a", "name": "A", "cwd": "/tmp", "prompt": "p", "model": "  claude-sonnet-5-5 ", "effort": "turbo"}]"#.utf8))
+        #expect(decoded[0].model == "  claude-sonnet-5-5 " && decoded[0].effort == "turbo", "kept as in the file")
+        #expect(decoded[0].launchModel == "claude-sonnet-5-5", "trimmed at launch")
+        #expect(decoded[0].launchEffort == nil, "an unknown effort is ignored at launch")
+        #expect(ActionItem(id: "b", name: "B", cwd: "/", prompt: "", model: "  ", effort: "").launchModel == nil, "blank is none")
+        #expect(ActionItem(id: "c", name: "C", cwd: "/", prompt: "", effort: " XHigh ").launchEffort == .xhigh)
+        #expect(ClaudeEffort.allCases.map(\.rawValue) == ["low", "medium", "high", "xhigh", "max"])
+    }
+
+    @Test("Terminal script: --model and --effort before the prompt when set, byte-identical without them")
+    func modelAndEffortScript() throws {
+        let head = "#!/bin/zsh\ncd '/tmp' && exec "
+        func script(_ model: String?, _ effort: String?, prompt: String = "/tidy-up") -> String {
+            ActionLaunch.commandScript(for: ActionItem(id: "d", name: "D", cwd: "/tmp", prompt: prompt, model: model, effort: effort))
+        }
+        #expect(script(nil, nil) == head + "claude '/tidy-up'\n", "neither: as before")
+        #expect(script(nil, nil) == ActionLaunch.commandScript(cwd: "/tmp", prompt: "/tidy-up"))
+        #expect(script(nil, nil, prompt: "") == head + "claude\n")
+        #expect(script("sonnet", nil) == head + "claude --model 'sonnet' '/tidy-up'\n", "model only")
+        #expect(script(nil, "low") == head + "claude --effort 'low' '/tidy-up'\n", "effort only")
+        #expect(script("claude-sonnet-5-5", "high") == head + "claude --model 'claude-sonnet-5-5' --effort 'high' '/tidy-up'\n", "both")
+        #expect(script(" opus ", "MAX", prompt: "") == head + "claude --model 'opus' --effort 'max'\n", "trimmed; no prompt")
+        #expect(script("it's; rm -rf ~", nil) == head + "claude --model 'it'\\''s; rm -rf ~' '/tidy-up'\n", "an odd model stays one quoted word")
+        #expect(script(nil, "turbo") == script(nil, nil), "an invalid effort is dropped")
+        #expect(script("  ", "") == script(nil, nil), "blank values are none")
+        #expect(ActionLaunch.commandScript(cwd: "/tmp", prompt: "hi", model: "haiku", effort: .medium)
+            == head + "claude --model 'haiku' --effort 'medium' 'hi'\n")
+        #expect(NewSessionLaunch.commandScript(home: "/tmp") == head + "claude\n", "the new-session button is unchanged")
+    }
+
     @Test("Send guard: Return only while Claude is frontmost and within the send window")
     func sendGuard() {
         let claude = SessionOpener.claudeBundleIdentifier

@@ -73,16 +73,28 @@ enum ActionLaunch {
         return components.url
     }
 
-    /// The shell script of the terminal fallback: a `.command` file the default terminal app runs.
+    /// The shell script of the terminal fallback: a `.command` file the default terminal app runs, with
+    /// the item's model and effort. An effort the CLI does not know is left out (and logged).
     static func commandScript(for item: ActionItem) -> String {
-        commandScript(cwd: item.resolvedCwd, prompt: item.prompt)
+        let effort = item.launchEffort
+        if effort == nil, let raw = item.effort, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            NSLog("\(AppInfo.name): action %@ has an unknown effort, launching without it", item.id)
+        }
+        return commandScript(cwd: item.resolvedCwd, prompt: item.prompt, model: item.launchModel, effort: effort)
     }
 
     /// A `.command` script that runs `claude` in `cwd` (symlinks resolved, so the CLI sees the path it
-    /// already trusts) with `prompt` as its first message; an empty prompt runs plain `claude`.
-    static func commandScript(cwd: String, prompt: String) -> String {
+    /// already trusts) with `prompt` as its first message; an empty prompt runs plain `claude`. `model`
+    /// (trimmed, a blank one is none) and `effort` go before the prompt as `--model` and `--effort`.
+    static func commandScript(cwd: String, prompt: String, model: String? = nil, effort: ClaudeEffort? = nil) -> String {
         let folder = shellQuoted(NSString(string: cwd).resolvingSymlinksInPath)
-        let command = prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "claude" : "claude \(shellQuoted(prompt))"
+        var words = ["claude"]
+        if let model = model?.trimmingCharacters(in: .whitespacesAndNewlines), !model.isEmpty {
+            words += ["--model", shellQuoted(model)]
+        }
+        if let effort { words += ["--effort", shellQuoted(effort.rawValue)] }
+        if !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { words.append(shellQuoted(prompt)) }
+        let command = words.joined(separator: " ")
         return """
         #!/bin/zsh
         cd \(folder) && exec \(command)

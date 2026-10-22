@@ -3,7 +3,8 @@ import Observation
 
 /// The status item: the blob glyph (`MenuBarIcon`, the drop while a session needs input) and the
 /// app menu. The menu is rebuilt each time it opens: a status line, the sessions themselves (click
-/// opens one like the panel does), panel visibility and position, Settings, the welcome, Quit.
+/// opens one like the panel does), panel visibility and position, Settings, the update check, the
+/// welcome, Quit.
 ///
 /// The glyph follows the sessions: `observe()` tracks `Actions.needsInputCount` (whatever it reads,
 /// the store's sessions and their states) and redraws the image only when the aggregate (any session
@@ -26,6 +27,10 @@ final class MenuBar: NSObject, NSMenuDelegate {
         var resetPosition: () -> Void = {}
         var openSettings: () -> Void = {}
         var showWelcome: () -> Void = {}
+        /// "Check for Updates…", or the update a scheduled check found (`AppUpdater.menuTitle`).
+        var updateTitle: () -> String = { AppUpdater.menuTitle(pendingVersion: nil) }
+        var canCheckForUpdates: () -> Bool = { false }
+        var checkForUpdates: () -> Void = {}
     }
 
     /// Most sessions listed in the menu; the status line still counts them all.
@@ -103,6 +108,9 @@ final class MenuBar: NSObject, NSMenuDelegate {
         menu.addItem(item("Reset position", #selector(resetPosition)))
         menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(openSettings), key: ","))
+        let update = item(actions.updateTitle(), #selector(checkForUpdates))
+        update.isEnabled = actions.canCheckForUpdates()
+        menu.addItem(update)
         menu.addItem(item("Show welcome…", #selector(showWelcome)))
         menu.addItem(.separator())
         menu.addItem(item("Quit \(AppInfo.name)", #selector(quit), key: "q"))
@@ -151,6 +159,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     @objc private func resetPosition() { actions.resetPosition() }
     @objc private func openSettings() { actions.openSettings() }
     @objc private func showWelcome() { actions.showWelcome() }
+    @objc private func checkForUpdates() { actions.checkForUpdates() }
 
     @objc private func quit() {
         NSApp.terminate(nil)

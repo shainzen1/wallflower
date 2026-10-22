@@ -32,7 +32,7 @@ Wallflower runs all day, so these rules are not up for trade:
 - **0 % CPU at rest.** No polling, no repeating timers, no `Timer`, no per-frame work on the main thread. React to file and process events (`DispatchSource`).
 - **Loops live in Core Animation.** Blinks, breathing, pulses and orbits are `CAAnimation`s that run in the render server, not code that runs every frame.
 - **One window resize per transition**, never per frame.
-- **No network access**, no analytics, no telemetry.
+- **No network access** beyond the weekly update check (Sparkle, off in Settings), no analytics, no telemetry.
 
 If a change needs to break one of these, say so in the pull request and explain why.
 

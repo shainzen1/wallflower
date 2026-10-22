@@ -12,7 +12,7 @@
 
 - A slim black capsule on the edge of your screen (the right one, or the left if you prefer) with one small animated face for every running Claude Code session.
 - Each face's shape tells you how that session is doing: it needs you, it's working, it just finished, or it's resting. Hover to read the name and status, click to jump straight to that chat.
-- A native macOS menu bar app. It uses no CPU while nothing changes, makes no network requests and collects nothing.
+- A native macOS menu bar app. It uses no CPU while nothing changes and collects nothing. The only thing it asks the internet is GitHub, once a week, whether there is a newer version.
 
 ## Reading the faces
 
@@ -29,7 +29,7 @@
 | Grey, flattened, eyes closed, fading out | **Ended.** The session's process exited. |
 | Lavender star below a thin divider | An **action face**, a shortcut you set up (see below). |
 
-Colours depend on the Colour setting. With **Status**, amber means needs input, cyan working, mint just finished, soft mint your turn, warm grey idle and grey ended. With **Project**, every repository gets its own hue (amber and mint keep their meaning, and a parked session dims its hue). **Per session** gives each session its own colour. With Reduce Motion turned on, faces crossfade instead of moving.
+Colours depend on the Colour setting. With **Status**, amber means needs input, cyan working, mint just finished, lime your turn, warm grey idle and grey ended. With **Project**, every repository gets its own hue (amber, mint and lime keep their meaning, and a parked session dims its hue). **Per session** gives each session its own colour. In every setting the two faces that want you stand out: amber needs input is the loudest, lime your turn comes next, both with a glow and a line on the capsule's edge. With Reduce Motion turned on, faces crossfade instead of moving.
 
 ## Install
 
@@ -41,6 +41,10 @@ Colours depend on the Colour setting. With **Status**, amber means needs input, 
    ```
 
 3. A short welcome tour opens. The capsule sits on the right edge of your main display (**Settings > General > Panel side** moves it to the left edge), and a small blob appears in the menu bar.
+
+### Updates
+
+Wallflower checks for a new version once a week and shows what changed. Nothing downloads until you click **Install Update**; the new version then replaces the old one in place and relaunches. **Check for Updates…** in the menu bar menu checks right away, and **Settings > General > Check for updates automatically** turns the weekly check off. Version 0.1.0 has no updater yet: download 0.1.1 or later by hand once, and every update after that arrives in the app.
 
 ### Build from source
 
@@ -67,9 +71,9 @@ mv build/Wallflower.app /Applications/
 - **Drag** the capsule up or down along the edge. It remembers the spot. **Reset position** puts it back in the middle.
 - **Left or right:** **Settings > General > Panel side** docks the capsule to the left or the right screen edge. The panel moves at once and everything mirrors: the bulge opens to the right, the faces look and stretch toward the screen, and you throw a face out to the right.
 - **Throw** a face out to stop watching that session: drag it away from the screen edge (to the left, or to the right with the panel on the left edge), out of the capsule, and let go, or just fling it. It flies off and stays hidden for the life of that session, even if it later needs you. **Show hidden sessions** in the menu brings them all back.
-- **Menu bar:** the blob icon shows a status line and your sessions (click one to open it), plus Show hidden sessions, Hide panel, Reset position, Settings… (⌘,), Show welcome… and Quit.
+- **Menu bar:** the blob icon shows a status line and your sessions (click one to open it), plus Show hidden sessions, Hide panel, Reset position, Settings… (⌘,), Check for Updates…, Show welcome… and Quit.
 - **Settings:**
-  - *General:* Launch at login. Show sessions from the Claude app, from terminals and editors, or everywhere, and sessions from other tools (on or off, see below). New session button (on or off). Panel side (Left or Right) and Reset position. Your actions (add, edit, reorder, remove), where actions run (Terminal or the Claude app) and, for the Claude app, permission to send the prompt (see below).
+  - *General:* Launch at login. Check for updates automatically (weekly) and Check Now. Show sessions from the Claude app, from terminals and editors, or everywhere, and sessions from other tools (on or off, see below). New session button (on or off). Panel side (Left or Right) and Reset position. Your actions (add, edit, reorder, remove), where actions run (Terminal or the Claude app) and, for the Claude app, permission to send the prompt (see below).
   - *Appearance:* a live preview. Face (Blob or Dot matrix), Screen filter, Colour (Status, Project, Per session), Shape, Hover (Magnify, Stretch, None). Under Advanced: Goo (Liquid or Crisp), Expand (the row or the whole column) and a face playground.
   - *About:* version, links and the welcome tour.
 
@@ -85,6 +89,7 @@ Wallflower ships with no actions; you set up your own in **Settings > General > 
 - Double-click an action (or select it and click **Edit…**) to change it. Changes save as you type, and the face in the capsule follows right away.
 - **−** removes the selected action. The arrow buttons move it up or down, or drag it onto another row. The capsule shows the actions in the same order.
 - The **M T W T F S S** toggles pick the weekdays a face shows on. With all seven on it shows every day; the last day that is on can't be turned off.
+- **Model** and **Effort** pick what the session starts with, so a routine prompt can run on a cheaper model. **Default** leaves the choice to Claude Code; **Custom…** takes a full model id. They apply when actions run in Terminal; the Claude app ignores them.
 
 Actions live in `~/Library/Application Support/Wallflower/actions.json`, which starts as an empty list (`[]`). The editor reads and writes this file, so the two never disagree. **Edit JSON…** in the same section opens it in your text editor, for the extra fields below. Changes apply as soon as you save; if the file has a mistake, Wallflower keeps the last version that worked.
 
@@ -95,7 +100,9 @@ Actions live in `~/Library/Application Support/Wallflower/actions.json`, which s
     "name": "Standup notes",
     "cwd": "~/notes",
     "prompt": "Write today's standup notes from yesterday's commits",
-    "days": ["mon", "tue", "wed", "thu", "fri"]
+    "days": ["mon", "tue", "wed", "thu", "fri"],
+    "model": "sonnet",
+    "effort": "low"
   },
   {
     "id": "review",
@@ -119,12 +126,14 @@ Actions live in `~/Library/Application Support/Wallflower/actions.json`, which s
 | `shape` | Optional. One of `round`, `squircle`, `pebble`, `bean`, `drop`, `pill`, `softHex`, `cloud`, `star`. |
 | `color` | Optional. A body colour as `#RRGGBB`. |
 | `days` | Optional. The weekdays the face shows on, as `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, `sun`. Leave it out to show the face every day; unknown values are ignored. The editor's day toggles write this field. |
+| `model` | Optional. The model the session runs on, passed to `claude --model`: an alias (`fable`, `opus`, `sonnet`, `haiku`) or a full model id. Leave it out for your Claude Code default. Terminal only; the Claude app ignores it. |
+| `effort` | Optional. The effort level, passed to `claude --effort`: `low`, `medium`, `high`, `xhigh` or `max`. Leave it out for the default; an unknown value is ignored. Terminal only, like `model`. |
 
 The editor keeps `seed`, `symbol`, `shape` and `color` as they are when you change an action, so you can set them in the file and keep using the editor.
 
 ### Running actions in the Claude app
 
-If you'd rather have action sessions in the Claude desktop app, set **Settings > General > Run actions in** to **Claude app**. A click then opens a new chat in the action's folder with the prompt filled in. The folder has to be one the Claude app already trusts; for a new folder, Claude asks first and nothing is sent.
+If you'd rather have action sessions in the Claude desktop app, set **Settings > General > Run actions in** to **Claude app**. A click then opens a new chat in the action's folder with the prompt filled in. The Claude app's link has no way to pick a model, so an action's `model` and `effort` only apply in Terminal. The folder has to be one the Claude app already trusts; for a new folder, Claude asks first and nothing is sent.
 
 The Claude app's link for a new chat can only fill the prompt in, not send it. To send it for you, Wallflower presses Return in Claude, which needs Accessibility permission: turn on **Allow sending** in the same section and allow Wallflower in System Settings. It only ever types into the Claude app, only for a few seconds after your click, and never touches text that isn't the action's prompt. Without the permission, the prompt waits in Claude's composer and the face reminds you to press Return. Because releases aren't signed with a Developer ID yet, macOS may ask for the permission again after you update Wallflower.
 
@@ -157,7 +166,7 @@ Wallflower reads only these local files and never writes to them:
 - `.git/HEAD` in the session's folder, for the branch name.
 - `~/Library/Application Support/Wallflower/sessions/*.json`, the session files other tools write (see [Other tools](#other-tools)).
 
-It writes only its own settings (including the list of hidden sessions) and `~/Library/Application Support/Wallflower/` (`actions.json` and the small launch scripts action faces run in Terminal). It makes no network requests and has no analytics or telemetry. Nothing leaves your Mac.
+It writes only its own settings (including the list of hidden sessions) and `~/Library/Application Support/Wallflower/` (`actions.json` and the small launch scripts action faces run in Terminal). Once a week it asks GitHub whether there is a newer version: it downloads `appcast.xml`, a small file with the latest version number and its release notes, from the project's latest release, and the update itself only when you choose to install it. Like any web request, this shows GitHub your IP address and, in the user agent, the Wallflower version. It sends no system profile, no analytics and no telemetry, and nothing else leaves your Mac. Turn the check off in **Settings > General > Check for updates automatically**.
 
 ## Limitations
 

@@ -282,14 +282,7 @@ struct YourTurnTests {
                     #expect(program.tracks[0].samples.contains { $0.pose.lid < 1 }, "it blinks")
                     #expect(program.pose.yaw == Theme.blobNeedsInputYaw, "it looks at the person")
                     if shapeMode == .status { #expect(program.body == BlobBody(shape: Theme.blobIdleShape)) }
-                    switch (colorMode, projectKey) {
-                    case (.project, .some(let key)):
-                        #expect(program.color == ProjectColor.color(for: key), "the project colour, undimmed")
-                    case (.identity, _):
-                        #expect(program.color == identity.blobColor)
-                    default:
-                        #expect(program.color == Theme.yourTurnColor)
-                    }
+                    #expect(program.color == Theme.yourTurnColor, "the your-turn lime in every colour mode")
                 }
             }
         }
@@ -364,48 +357,50 @@ struct YourTurnTests {
         #expect(yourTurn.unit.opacity == 1 && yourTurn.unit.color == Theme.yourTurnColor)
     }
 
-    @Test("Calmer than the done moment and than amber: halo, edge cue, colour")
+    @Test("Louder than working and the done moment, below amber: halo, edge cue, colour")
     func belowAmber() {
-        #expect(Theme.yourTurnHaloOpacity < Theme.doneHaloOpacity)
+        // Needs input stays the loudest: a higher halo peak, a halo and an edge cue that rest above
+        // the low end of the your-turn breath, and a brighter edge peak.
         #expect(Theme.yourTurnHaloOpacity < Theme.attentionHaloOpacity)
+        #expect(Theme.yourTurnHaloOpacity * Theme.yourTurnHaloPulse.scale < Theme.attentionHaloOpacity * Theme.attentionHaloRestFraction)
         #expect(Theme.yourTurnEdgeOpacity < Theme.attentionEdgeOpacity)
+        #expect(Theme.yourTurnEdgeOpacity * Theme.yourTurnHaloPulse.scale < Theme.attentionEdgeOpacity * Theme.attentionEdgeRestFraction)
+        // Louder than before (the old mint at 0.5 and 0.85) and than the done halo it follows.
+        #expect(Theme.yourTurnHaloOpacity > 0.5 && Theme.yourTurnEdgeOpacity > 0.85 && Theme.yourTurnHaloOpacity > Theme.doneHaloOpacity)
         #expect(BlobHalo.yourTurn(color: Theme.yourTurnColor).breath == Theme.yourTurnHaloPulse)
-        #expect(Set([Theme.yourTurnColor, Theme.justFinishedColor, Theme.idleColor, Theme.needsInputColor]).count == 4)
-        // Muted mint: between the flash and idle in green, never more saturated than the flash.
-        #expect(Theme.yourTurnColor.green < Theme.justFinishedColor.green && Theme.yourTurnColor.green > Theme.idleColor.green)
+        #expect(Set([Theme.yourTurnColor, Theme.justFinishedColor, Theme.idleColor, Theme.needsInputColor, Theme.workingColor]).count == 5)
+        // A vivid lime: fully bright green, saturated, yellower than the mint flash, no amber in it.
+        let lime = Theme.yourTurnColor
+        #expect(lime.green == 1 && lime.green - lime.blue >= 0.7 && lime.red > lime.blue && lime.red < 0.8)
+        #expect(lime.red > Theme.justFinishedColor.red && lime.blue < Theme.justFinishedColor.blue)
         // Idle keeps the warm grey hue (red over green over blue) at a lower value.
         #expect(Theme.idleColor.red > Theme.idleColor.green && Theme.idleColor.green > Theme.idleColor.blue)
         #expect(Theme.idleColor.red < 0.7 && Theme.idleGlowOpacity < 0.45 && Theme.projectIdleDim > 0.45)
     }
 
-    @Test("Edge cue: waiting rows amber, your-turn rows in their body colour, nothing else")
+    @Test("Edge cue: waiting rows amber, your-turn rows in the your-turn colour, nothing else")
     func edgeCues() {
-        let mint = Theme.yourTurnColor
-        #expect(AttentionEdgeCue(status: .needsInput(kind: .permission), bodyColor: mint) == .waiting(.permission))
-        #expect(AttentionEdgeCue(status: .yourTurn(since: since), bodyColor: mint) == .yourTurn(mint))
+        let lime = Theme.yourTurnColor
+        #expect(AttentionEdgeCue(status: .needsInput(kind: .permission), bodyColor: lime) == .waiting(.permission))
+        #expect(AttentionEdgeCue(status: .yourTurn(since: since), bodyColor: lime) == .yourTurn(lime))
         for status: FaceStatus in [.working, .idle(since: since), .justFinished, .ended] {
-            #expect(AttentionEdgeCue(status: status, bodyColor: mint) == nil)
+            #expect(AttentionEdgeCue(status: status, bodyColor: lime) == nil)
         }
-        #expect(AttentionEdgeCue.yourTurn(mint).halo.color == mint)
-        #expect(AttentionEdgeCue.yourTurn(mint).halo.opacity == Theme.yourTurnEdgeOpacity)
+        #expect(AttentionEdgeCue.yourTurn(lime).halo.color == lime)
+        #expect(AttentionEdgeCue.yourTurn(lime).halo.opacity == Theme.yourTurnEdgeOpacity)
         #expect(AttentionEdgeCue.waiting(.question).halo.color == Theme.needsInputColor)
-        let loop = AttentionEdgeCue.yourTurn(mint).loop(phase: 0.25)
+        let loop = AttentionEdgeCue.yourTurn(lime).loop(phase: 0.25)
         #expect(loop.duration == Theme.yourTurnHaloPulse.period && loop.repeatCount == .infinity)
     }
 
-    @Test("The edge cue and the halo of a your-turn row take its body colour in every mode and style; amber stays amber", arguments: Theme.ColorMode.allCases)
+    @Test("The body, edge cue and halo of a your-turn row are the your-turn colour in every mode and style; amber stays amber", arguments: Theme.ColorMode.allCases)
     func cueMatchesBody(colorMode: Theme.ColorMode) {
         let seed = "cue-seed"
         let key = "project-a"
         let turn = FaceStatus.yourTurn(since: since)
         for style in FaceStyle.allCases {
             let body = FaceLook.bodyColor(for: turn, seed: seed, projectKey: key, style: style, colorMode: colorMode)
-            let expected: EyeColor = switch (style, colorMode) {
-            case (_, .status): Theme.yourTurnColor
-            case (_, .project): ProjectColor.color(for: key)
-            case (.blob, .identity): FaceIdentity(seed: seed).blobColor
-            case (.dotMatrix, .identity): FaceIdentity(seed: seed).color
-            }
+            let expected = Theme.yourTurnColor
             #expect(body == expected, "\(style) \(colorMode)")
             #expect(AttentionEdgeCue(status: turn, bodyColor: body)?.halo.color == expected)
             let waiting = FaceStatus.needsInput(kind: .question)
@@ -417,11 +412,17 @@ struct YourTurnTests {
         #expect(program.color == body && program.halo?.color == body, "the halo is the body colour, the cue's colour")
     }
 
-    @Test("Project colour mode: your turn keeps the project colour undimmed; it rests on the idle body")
+    @Test("Project colour mode: your turn is the your-turn colour, not the project colour; it rests on the idle body")
     func projectAndReach() {
-        let key = "project-a"
-        let project = ProjectColor.color(for: key)
-        #expect(ProjectColor.color(for: .yourTurn(since: since), projectKey: key) == project)
+        for key in ProjectColor.sampleKeys(count: Theme.projectPalette.count) {
+            let project = ProjectColor.color(for: key)
+            let turn = ProjectColor.color(for: .yourTurn(since: since), projectKey: key)
+            #expect(turn == Theme.yourTurnColor && turn != project, "\(project.name)")
+            #expect(ProjectColor.color(for: .working, projectKey: key) == project, "working keeps the project colour")
+            let identity = FaceIdentity(seed: key)
+            #expect(BlobProgramBuilder.program(for: .status(.yourTurn(since: since)), identity: identity, colorMode: .project, projectKey: key).color == Theme.yourTurnColor)
+            #expect(FaceProgramBuilder.program(for: .status(.yourTurn(since: since)), identity: identity, colorMode: .project, projectKey: key).color == Theme.yourTurnColor)
+        }
         #expect(BlobBody.forStatus(.yourTurn(since: since)) == BlobBody(shape: Theme.blobIdleShape))
         let reach = FaceReach.session(status: .yourTurn(since: since), seed: "r", hovered: false, style: .dotMatrix, shapeMode: .status)
         let idle = FaceReach.session(status: .idle(since: since), seed: "r", hovered: false, style: .dotMatrix, shapeMode: .status)

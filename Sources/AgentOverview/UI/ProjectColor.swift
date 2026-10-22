@@ -9,14 +9,17 @@ enum ProjectColor {
         return palette[SeedHash(projectKey).index(0, count: palette.count)]
     }
 
-    /// `.project` colour mode: the body colour of a status. Needs input is amber whatever the project,
-    /// working, just finished and your turn show the project colour (the builder adds the mint flash
-    /// and the your-turn halo), idle the project colour dimmed by `Theme.projectIdleDim`, ended the grey of every mode.
+    /// `.project` colour mode: the body colour of a status. The two signals ignore the project: needs
+    /// input is amber, your turn the your-turn lime (`Theme.yourTurnColor`), so the faces that want the
+    /// person stand out from the working faces of the same repo. Working and just finished show the
+    /// project colour (the builder adds the mint flash), idle the project colour dimmed by
+    /// `Theme.projectIdleDim`, ended the grey of every mode.
     static func color(for status: FaceStatus, projectKey: String) -> EyeColor {
         let project = color(for: projectKey)
         switch status {
         case .needsInput: return Theme.needsInputColor
-        case .working, .justFinished, .yourTurn: return project
+        case .yourTurn: return Theme.yourTurnColor
+        case .working, .justFinished: return project
         case .idle: return project.dimmed(Theme.projectIdleDim)
         case .ended: return Theme.endedColor
         }

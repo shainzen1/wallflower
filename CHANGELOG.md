@@ -4,7 +4,21 @@ All notable changes to Wallflower are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-10-22
+
+### Changed
+
+- Privacy: Wallflower now makes one kind of network request, the weekly update check (see Added), and Settings turns it off. Still no system profile, no analytics and no telemetry.
+- Your turn is louder and has its own colour: a vivid lime in every Colour setting (it used to keep the project or session colour, so in a repo with several sessions it looked like the working ones). Its glow and edge line are stronger, and the amber of needs input got a stronger glow and edge line too, so it stays the loudest. The project colour green became emerald and the per-session sage became seafoam, so nothing else looks like the lime.
+
+### Added
+
+- In-app updates with [Sparkle](https://sparkle-project.org): once a week Wallflower asks GitHub whether there is a newer version and, if so, shows what changed and installs it in place when you click Install Update. **Check for Updates…** in the menu bar menu checks right away; Settings > General has **Check for updates automatically** (weekly) and **Check Now** with the time of the last check. Updates are verified with an EdDSA signature before they are unpacked. The check sends no system profile, and nothing downloads until you say so. Coming from 0.1.0, install this version by hand once.
+- Model and effort per action: an action can start Claude Code with its own model (`claude --model`, an alias such as `sonnet` or a full model id) and effort (`claude --effort`, `low` to `max`), so a routine prompt can run on a cheaper model. Set them in the action editor's Model and Effort pickers (Custom… takes a full model id) or as `model` and `effort` in `actions.json`; Default leaves them out. They apply when actions run in Terminal; the Claude app ignores them. The actions list shows them after the days.
+
 ## [0.1.0] - 2026-10-17
+
+The first public release.
 
 ### Added
 
@@ -29,4 +43,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The welcome's Set up page keeps the "Where do you run Claude Code?" choice and the Launch at login switch inside their card.
 
+[0.1.1]: https://github.com/shainzen1/wallflower/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/shainzen1/wallflower/releases/tag/v0.1.0

@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// The General tab: launch at login, which sessions to show, the new session button, the panel position,
-/// the action faces.
+/// The General tab: launch at login, updates, which sessions to show, the new session button, the panel
+/// position, the action faces.
 struct GeneralSettingsView: View {
     @Bindable var settings: AppSettings
     let launchAtLogin: LaunchAtLogin
+    /// The updater; nil (or not running) shows the update controls disabled.
+    var updater: AppUpdater?
     let accessibility: AccessibilityAccess
     let actions: SettingsActions
     /// The actions editor; nil shows no list.
@@ -25,6 +27,8 @@ struct GeneralSettingsView: View {
                     }
                 }
             }
+
+            updatesSection
 
             Section {
                 Picker("Show sessions from", selection: $settings.sessionSource) {
@@ -64,6 +68,31 @@ struct GeneralSettingsView: View {
         .formStyle(.grouped)
         .scrollDisabled(true)
     }
+
+    /// "Check for updates automatically" (weekly, Sparkle's setting) and "Check Now" with the last check.
+    private var updatesSection: some View {
+        let running = updater?.isRunning == true
+        return Section {
+            Toggle("Check for updates automatically", isOn: Binding(
+                get: { updater?.automaticallyChecks == true },
+                set: { updater?.setAutomaticallyChecks($0) }
+            ))
+            .disabled(!running)
+            LabeledContent {
+                Button("Check Now") { updater?.checkForUpdates() }
+                    .disabled(updater?.canCheckForUpdates != true)
+            } label: {
+                Text(AppUpdater.lastCheckText(updater?.lastCheckDate, offReason: updater.map(\.offReason) ?? .scriptedLaunch))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        } footer: {
+            SettingsFootnote(Self.updatesFootnote)
+        }
+    }
+
+    /// What the weekly check sends, in the words of the README's Privacy section.
+    static let updatesFootnote = "Once a week \(AppInfo.name) asks GitHub whether a newer version is out. It sends no system profile and nothing else."
 }
 
 /// Secondary text under a section, aligned with the section's content.

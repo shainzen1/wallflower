@@ -205,6 +205,6 @@ struct ShapedHaloTests {
         let (_, root) = tree(config(turn))
         let l = try layers(of: root)
         #expect(l.halo.opacity == Float(halo.restFraction) && l.haloHost.opacity == Float(Theme.yourTurnHaloOpacity))
-        #expect(Theme.yourTurnHaloOpacity < Theme.doneHaloOpacity && Theme.yourTurnHaloOpacity < Theme.attentionHaloOpacity)
+        #expect(Theme.yourTurnHaloOpacity < Theme.attentionHaloOpacity)
     }
 }

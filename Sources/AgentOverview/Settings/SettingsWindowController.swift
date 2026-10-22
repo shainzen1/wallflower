@@ -23,7 +23,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     ///   - actionStore: the action faces, for the actions editor on the General tab.
     ///   - showsAdvanced: open the Appearance tab's Advanced disclosure (`--settings-advanced`).
     init(
-        settings: AppSettings, launchAtLogin: LaunchAtLogin, actions: SettingsActions, actionStore: ActionStore? = nil,
+        settings: AppSettings, launchAtLogin: LaunchAtLogin, updater: AppUpdater? = nil, actions: SettingsActions, actionStore: ActionStore? = nil,
         tab: SettingsTab = .general, showsAdvanced: Bool = false
     ) {
         let accessibility = AccessibilityAccess()
@@ -35,7 +35,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         tabs.tabStyle = .toolbar
         tabs.transitionOptions = [.crossfade, .allowUserInteraction]
         tabs.addTab(SettingsTab.general, content: GeneralSettingsView(
-            settings: settings, launchAtLogin: launchAtLogin, accessibility: accessibility, actions: actions,
+            settings: settings, launchAtLogin: launchAtLogin, updater: updater, accessibility: accessibility, actions: actions,
             actionEditor: actionEditor
         ))
         tabs.addTab(SettingsTab.appearance, content: AppearanceSettingsView(

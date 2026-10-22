@@ -23,7 +23,7 @@ struct ActionsSettingsSection: View {
                 Text("Start a new Claude session with a saved prompt.")
             }
             if let editor {
-                ActionListView(model: editor)
+                ActionListView(model: editor, launcher: settings.actionLauncher)
             }
         } header: {
             Text("Actions")
@@ -61,6 +61,8 @@ struct ActionsSettingsSection: View {
 /// stayed at 0), so a new or moved action could end up out of sight. `scrollPosition(id:)` scrolls.
 struct ActionListView: View {
     @Bindable var model: ActionEditorModel
+    /// How actions run, for the sheet's note on the model fields.
+    var launcher: Theme.ActionLauncher = Theme.actionLauncher
 
     static let rowHeight: CGFloat = 44
     static let visibleRows = 4
@@ -131,12 +133,12 @@ struct ActionListView: View {
         }
         .onChange(of: model.items) { model.sync() }
         .sheet(isPresented: Binding(get: { model.draft != nil }, set: { if !$0 { model.cancel() } })) {
-            ActionEditorSheet(model: model)
+            ActionEditorSheet(model: model, launcher: launcher)
         }
     }
 }
 
-/// One row: the name and the days on the first line, the folder and the start of the prompt below.
+/// One row: the name and the caption (days, model, effort) on the first line, the folder and the start of the prompt below.
 /// Selected, it fills with the selection colour (muted while the window is in the background).
 private struct ActionListRow: View {
     let row: ActionEditorModel.Row
@@ -150,7 +152,7 @@ private struct ActionListRow: View {
                 Text(row.name)
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                Text(row.days)
+                Text(row.caption)
                     .font(.caption)
                     .foregroundStyle(secondaryStyle)
                     .lineLimit(1)
@@ -218,10 +220,13 @@ private struct ActionListBar: View {
     }
 }
 
-/// The sheet for one action: name, folder (typed or chosen), prompt and weekdays. An existing action
-/// saves as you type and closes with Done; a new one is added with Add (or dropped with Cancel).
+/// The sheet for one action: name, folder (typed or chosen), prompt, weekdays, then the model and
+/// effort of the session. An existing action saves as you type and closes with Done; a new one is
+/// added with Add (or dropped with Cancel).
 struct ActionEditorSheet: View {
     let model: ActionEditorModel
+    /// How actions run: the Claude app gets a note that it ignores the model fields.
+    var launcher: Theme.ActionLauncher = Theme.actionLauncher
 
     static let width: CGFloat = 460
 
@@ -257,10 +262,28 @@ struct ActionEditorSheet: View {
                     }
                 } header: {
                     Text(draft.isNew ? "New action" : "Edit action")
+                }
+
+                Section {
+                    Picker("Model", selection: Binding(get: { model.draft?.modelChoice ?? .standard }, set: { model.setModelChoice($0) })) {
+                        Text(ActionEditorModel.ModelChoice.standard.title).tag(ActionEditorModel.ModelChoice.standard)
+                        Divider()
+                        ForEach(ActionEditorModel.ModelChoice.aliases) { Text($0.title).tag($0) }
+                        Divider()
+                        Text(ActionEditorModel.ModelChoice.custom.title).tag(ActionEditorModel.ModelChoice.custom)
+                    }
+                    if draft.modelChoice == .custom {
+                        TextField("Model id", text: Binding(get: { model.draft?.customModel ?? "" }, set: { model.setCustomModel($0) }),
+                                  prompt: Text("claude-sonnet-5-5"))
+                            .multilineTextAlignment(.trailing)
+                    }
+                    Picker("Effort", selection: Binding(get: { model.draft?.effortChoice }, set: { model.setEffort($0) })) {
+                        Text("Default").tag(ClaudeEffort?.none)
+                        Divider()
+                        ForEach(ClaudeEffort.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
+                    }
                 } footer: {
-                    SettingsFootnote(draft.isNew
-                        ? "The prompt runs as the first message, slash commands included."
-                        : "Changes are saved as you type.")
+                    SettingsFootnote(footnote(isNew: draft.isNew))
                 }
             }
             .formStyle(.grouped)
@@ -285,6 +308,12 @@ struct ActionEditorSheet: View {
             .padding(.bottom, 16)
         }
         .frame(width: Self.width)
+    }
+
+    /// The model note (Claude app only), then how the sheet saves.
+    private func footnote(isNew: Bool) -> String {
+        let saving = isNew ? "The prompt runs as the first message, slash commands included." : "Changes are saved as you type."
+        return [ActionEditorModel.modelNote(for: launcher), saving].compactMap { $0 }.joined(separator: "\n")
     }
 
     /// The open panel for a folder; the choice is written short (`~/...`).

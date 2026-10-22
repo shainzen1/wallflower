@@ -38,6 +38,24 @@ struct LaunchArguments {
     /// `--defaults-suite <name>`: read and write the settings in this `UserDefaults` suite instead of the
     /// standard defaults, so a scripted check starts from a known state and leaves the real settings alone.
     var defaultsSuite: String?
+    /// `--updates <on|off>`: run the updater or not. Default: on, but off with `--defaults-suite`, since
+    /// Sparkle keeps its state in the bundle's standard defaults and asks the real feed. Turn it on in a
+    /// scripted launch only for a build with its own bundle id (see docs/DEVELOPMENT.md).
+    var updates: Bool?
+    /// `--check-for-updates <ui|background>`: check right after launch, as "Check Now" does (Sparkle's
+    /// windows) or as the weekly schedule does (quiet unless there is an update).
+    var checkForUpdates: UpdateCheck?
+
+    /// What `--check-for-updates` runs.
+    enum UpdateCheck: String, Equatable {
+        case ui, background
+    }
+
+    /// Whether this launch runs the updater (`--updates`, else off for a scripted launch).
+    var runsUpdater: Bool {
+        updates ?? (defaultsSuite == nil)
+    }
+
     /// `--show-settings <general|appearance|about>`: open the Settings window on that tab at launch.
     var showSettings: SettingsTab?
     /// `--welcome-keys <return,escape,...>`: with `--welcome`, press these keys in the welcome window one
@@ -292,6 +310,10 @@ struct LaunchArguments {
                 if let text = iterator.next() { panelSide = PanelSide(rawValue: text) }
             case "--defaults-suite":
                 if let text = iterator.next(), !text.isEmpty { defaultsSuite = text }
+            case "--updates":
+                if let text = iterator.next() { updates = AppSettings.switchValue(text) }
+            case "--check-for-updates":
+                if let text = iterator.next() { checkForUpdates = UpdateCheck(rawValue: text) }
             case "--show-settings":
                 if let text = iterator.next() { showSettings = SettingsTab(rawValue: text) }
             case "--welcome":

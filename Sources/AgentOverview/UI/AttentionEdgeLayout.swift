@@ -2,10 +2,11 @@ import QuartzCore
 
 /// What an edge cue beside a row says: the row waits for the person (`waiting`, amber in every colour
 /// mode, pulsing with the grow of its kind) or its turn ended and it waits for the next instruction
-/// (`yourTurn`, in the row's body colour at a lower opacity, breathing with its halo).
+/// (`yourTurn`, in the row's body colour, the your-turn lime in every mode, at a lower opacity,
+/// breathing with its halo).
 enum AttentionEdgeCue: Equatable, Sendable {
     case waiting(WaitingKind)
-    /// The row's body colour (`FaceLook.bodyColor`): the your-turn mint, the project or the identity colour.
+    /// The row's body colour (`FaceLook.bodyColor`): `Theme.yourTurnColor` in every colour mode.
     case yourTurn(EyeColor)
 
     /// The cue a status shows, nil for statuses without one. `bodyColor` is the face's body colour
@@ -22,7 +23,7 @@ enum AttentionEdgeCue: Equatable, Sendable {
     var halo: BlobHalo {
         switch self {
         case .waiting:
-            BlobHalo(color: Theme.needsInputColor, opacity: Theme.attentionEdgeOpacity, restFraction: Theme.attentionHaloRestFraction)
+            BlobHalo(color: Theme.needsInputColor, opacity: Theme.attentionEdgeOpacity, restFraction: Theme.attentionEdgeRestFraction)
         case .yourTurn(let color):
             BlobHalo(color: color, opacity: Theme.yourTurnEdgeOpacity, restFraction: Theme.yourTurnHaloPulse.scale, breath: Theme.yourTurnHaloPulse)
         }

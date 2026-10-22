@@ -88,7 +88,9 @@ struct ContainmentTests {
             let trimmed = rim(edge - top) * Theme.yourTurnHaloOpacity
             print("containment: your-turn \(shape) glow at the top of the hop: fill \(top) pt, \(trimmed) alpha left at the row's edge")
             #expect(top < edge, "the fill itself never reaches the clip (\(shape): \(top))")
-            #expect(trimmed < 0.08, "the clip only trims a faint rim (\(shape): \(trimmed))")
+            // The louder lime glow leaves about 0.1 alpha there in the worst case (the peak of the breath
+            // at the top of the hop); on screen the rim still fades out without a visible edge.
+            #expect(trimmed < 0.11, "the clip only trims a faint rim (\(shape): \(trimmed))")
         }
         // The attention hop: a bigger hop (5 pt), no swell. The capped drop's fill comes within a fraction
         // of a point of the row's edge, so the clip trims about half the rim there; in the panel the hop
@@ -98,7 +100,7 @@ struct ContainmentTests {
         let dropTrimmed = rim(edge - drop) * Theme.attentionHaloOpacity * Theme.attentionHaloRestFraction * fadeIn
         print("containment: waiting glow at the top of the attention hop: fill \(drop) pt, \(dropTrimmed) alpha left at the row's edge")
         #expect(drop < edge, "the fill stays inside the row (\(drop))")
-        #expect(dropTrimmed < 0.06, "a faint rim, the glow is still fading in (\(dropTrimmed))")
+        #expect(dropTrimmed < 0.11, "a faint rim, the glow is still fading in (\(dropTrimmed))")
     }
 
     @Test("The glow follows the silhouette: the body scaled by haloScale where it fits, held at the cap elsewhere")

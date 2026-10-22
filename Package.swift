@@ -23,12 +23,25 @@ let package = Package(
         /// The app's public name. The target and module keep the working name `AgentOverview`.
         .executable(name: "Wallflower", targets: ["AgentOverview"]),
     ],
+    dependencies: [
+        /// In-app updates. Pinned exactly: `scripts/release.sh` signs with this version's `sign_update`.
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
+    ],
     targets: [
         .executableTarget(
             name: "AgentOverview",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "Sources/AgentOverview",
             swiftSettings: [
                 .swiftLanguageMode(.v6)
+            ],
+            /// `scripts/bundle.sh` puts Sparkle.framework in Contents/Frameworks, next to Contents/MacOS. A
+            /// debug build also finds the copy SwiftPM puts next to the bare binary (`swift run`).
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"]),
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path"], .when(configuration: .debug)),
             ]
         ),
         .testTarget(

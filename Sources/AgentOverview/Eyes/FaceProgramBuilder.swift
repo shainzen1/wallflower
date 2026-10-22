@@ -32,17 +32,17 @@ enum FaceProgramBuilder {
         }
     }
 
-    /// The resting colour of a status. Needs input is amber in every mode; `.project` mode without a
-    /// project key falls back to the status colours.
+    /// The resting colour of a status. Needs input is amber and your turn `Theme.yourTurnColor` in every
+    /// mode; `.project` mode without a project key falls back to the status colours.
     static func color(for status: FaceStatus, identity: FaceIdentity, colorMode: Theme.ColorMode = Theme.colorMode, projectKey: String? = nil) -> EyeColor {
         if case .project = colorMode, let projectKey {
             return ProjectColor.color(for: status, projectKey: projectKey)
         }
         switch (colorMode, status) {
         case (_, .needsInput): return Theme.needsInputColor
+        case (_, .yourTurn): return Theme.yourTurnColor
         case (.identity, _): return identity.color
         case (_, .working): return Theme.workingColor
-        case (_, .yourTurn): return Theme.yourTurnColor
         case (_, .idle): return Theme.idleColor
         case (_, .justFinished): return Theme.idleColor
         case (_, .ended): return Theme.endedColor

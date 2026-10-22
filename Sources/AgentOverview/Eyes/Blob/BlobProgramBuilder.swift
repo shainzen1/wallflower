@@ -36,17 +36,17 @@ enum BlobProgramBuilder {
         }
     }
 
-    /// Body colour of a status. Needs input is amber in every colour mode. `.project` mode without a
-    /// project key (nothing to hash) falls back to the status colours.
+    /// Body colour of a status. Needs input is amber and your turn `Theme.yourTurnColor` in every colour
+    /// mode. `.project` mode without a project key (nothing to hash) falls back to the status colours.
     static func color(for status: FaceStatus, identity: FaceIdentity, colorMode: Theme.ColorMode = Theme.colorMode, projectKey: String? = nil) -> EyeColor {
         if case .project = colorMode, let projectKey {
             return ProjectColor.color(for: status, projectKey: projectKey)
         }
         switch (colorMode, status) {
         case (_, .needsInput): return Theme.needsInputColor
+        case (_, .yourTurn): return Theme.yourTurnColor
         case (.identity, _): return identity.blobColor
         case (_, .working): return Theme.workingColor
-        case (_, .yourTurn): return Theme.yourTurnColor
         case (_, .idle): return Theme.idleColor
         case (_, .justFinished): return Theme.idleColor
         case (_, .ended): return Theme.endedColor
@@ -117,7 +117,7 @@ enum BlobProgramBuilder {
             // Catches the eye without the urgency of amber: the body swaps between two silhouettes and
             // hops a little with each swap (only the hop in `.identity` shape mode or with a forced
             // body), normal eyes look at the person with the idle blink rhythm, no wander, no grow.
-            // The halo (and the edge cue) takes the body colour of the mode.
+            // The body, the halo and the edge cue are the your-turn lime in every colour mode.
             let attentive = resolved(.normal, identity).looking(yaw: Theme.blobNeedsInputYaw, pitch: Theme.blobNeedsInputPitch)
             var program = BlobProgram(pose: attentive, body: body(), color: color)
             program.tracks = [yourTurnTrack(attentive: attentive, identity: identity)]

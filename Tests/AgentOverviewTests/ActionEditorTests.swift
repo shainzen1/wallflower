@@ -272,10 +272,10 @@ struct ActionEditorTests {
         let model = fixture.model
 
         #expect(model.rows == [
-            ActionEditorModel.Row(id: "release", name: "Release notes", detail: "~/projects/app  ·  Draft release notes", days: "Fri"),
-            ActionEditorModel.Row(id: "blank", name: ActionEditorModel.untitled, detail: "~  ·  first line", days: "Every day"),
+            ActionEditorModel.Row(id: "release", name: "Release notes", detail: "~/projects/app  ·  Draft release notes", caption: "Fri"),
+            ActionEditorModel.Row(id: "blank", name: ActionEditorModel.untitled, detail: "~  ·  first line", caption: "Every day"),
             ActionEditorModel.Row(
-                id: "long", name: "Long", detail: String(repeating: "x", count: ActionEditorModel.promptPreviewLength) + "…", days: "Every day"
+                id: "long", name: "Long", detail: String(repeating: "x", count: ActionEditorModel.promptPreviewLength) + "…", caption: "Every day"
             ),
         ])
 
@@ -292,6 +292,89 @@ struct ActionEditorTests {
         #expect(model.selection == "long", "nothing selected: up picks the last")
         model.startEditing()
         #expect(model.draft?.id == "long", "Edit… opens the selection")
+    }
+
+    @Test("Model and effort pickers: aliases, Custom and Default both ways; other fields and unknown values survive")
+    func modelAndEffort() throws {
+        typealias Choice = ActionEditorModel.ModelChoice
+        #expect(Choice(model: nil) == .standard && Choice(model: "") == .standard && Choice(model: "  ") == .standard)
+        #expect(Choice(model: "fable") == .fable && Choice(model: "opus") == .opus && Choice(model: " sonnet ") == .sonnet)
+        #expect(Choice(model: "haiku") == .haiku)
+        #expect(Choice(model: "claude-sonnet-5-5") == .custom && Choice(model: "Sonnet") == .custom, "not an alias: Custom")
+        #expect(Choice.standard.storedModel(custom: "x") == nil && Choice.sonnet.storedModel(custom: "x") == "sonnet")
+        #expect(Choice.custom.storedModel(custom: " claude-opus-5-5 ") == "claude-opus-5-5" && Choice.custom.storedModel(custom: " ") == nil)
+        #expect(Choice.allCases.map(\.title) == ["Default", "Fable", "Opus", "Sonnet", "Haiku", "Custom…"])
+        #expect(ClaudeEffort.allCases.map(\.title) == ["Low", "Medium", "High", "Extra high", "Max"])
+
+        let custom = ActionEditorModel.Draft(ActionItem(id: "a", name: "A", cwd: "~", prompt: "", model: "claude-sonnet-5-5", effort: "xhigh"))
+        #expect(custom.modelChoice == .custom && custom.customModel == "claude-sonnet-5-5" && custom.model == "claude-sonnet-5-5")
+        #expect(custom.effortChoice == .xhigh)
+        let alias = ActionEditorModel.Draft(ActionItem(id: "a", name: "A", cwd: "~", prompt: "", model: "haiku"))
+        #expect(alias.modelChoice == .haiku && alias.customModel == "" && alias.effortChoice == nil)
+
+        let tuned = ActionItem(
+            id: "tuned", name: "Tuned", cwd: "~/notes", prompt: "/log", seed: "s", color: "#7FD1B9", days: ["mon"], model: "opus",
+            effort: "turbo"
+        )
+        let fixture = try EditorFixture([.notes, tuned])
+        defer { fixture.remove() }
+        let model = fixture.model
+        func saved() throws -> ActionItem {
+            let item = fixture.store.actions[1]
+            #expect(try fixture.fileItems()[1] == item)
+            return item
+        }
+
+        model.startEditing("tuned")
+        #expect(model.draft?.modelChoice == .opus && model.draft?.effortChoice == nil, "an unknown effort shows as Default")
+        model.setName("Tuned log")
+        let renamed = try saved()
+        #expect(renamed.effort == "turbo" && renamed.model == "opus", "an unknown effort survives other edits")
+        model.setEffort(.high)
+        #expect(try saved().effort == "high")
+        model.setModelChoice(.custom)
+        let switched = try saved()
+        #expect(model.draft?.customModel == "opus" && switched.model == "opus", "Custom starts from the alias, nothing changes yet")
+        model.setCustomModel(" claude-sonnet-5-5 ")
+        #expect(try saved().model == "claude-sonnet-5-5")
+        model.setCustomModel("")
+        let cleared = try saved()
+        #expect(model.draft?.modelChoice == .custom && cleared.model == nil, "a blank custom id stores nothing, the field stays")
+        model.setModelChoice(.sonnet)
+        #expect(try saved().model == "sonnet")
+        model.setModelChoice(.standard)
+        model.setEffort(nil)
+        let item = try saved()
+        #expect(item.model == nil && item.effort == nil, "Default writes nil")
+        #expect(item.seed == "s" && item.color == "#7FD1B9" && item.days == ["mon"] && item.name == "Tuned log", "other fields stay")
+        #expect(!String(decoding: try Data(contentsOf: fixture.store.fileURL), as: UTF8.self).contains("model"))
+
+        model.startAdding()
+        model.setName("Morning tidy")
+        model.setModelChoice(.custom)
+        #expect(model.draft?.customModel == "", "Custom from Default starts empty")
+        model.setCustomModel("claude-sonnet-5-5")
+        model.setEffort(.high)
+        model.finish()
+        let added = try #require(fixture.store.actions.last)
+        #expect(added.id == "morning-tidy" && added.model == "claude-sonnet-5-5" && added.effort == "high")
+        #expect(ActionLaunch.commandScript(for: added).hasSuffix("exec claude --model 'claude-sonnet-5-5' --effort 'high'\n"))
+    }
+
+    @Test("Model note and row captions: the Claude app ignores the model fields; the caption appends model and effort")
+    func modelNoteAndCaption() {
+        #expect(ActionEditorModel.modelNote(for: .terminalCommand) == nil)
+        #expect(ActionEditorModel.modelNote(for: .deepLinkAndSend) == "The Claude app ignores these; they apply when actions run in Terminal.")
+        #expect(ActionEditorModel.modelNote(for: .deepLinkNew) == ActionEditorModel.claudeAppModelNote)
+
+        func caption(_ model: String?, _ effort: String?, days: [String]? = nil) -> String {
+            ActionEditorModel.row(for: ActionItem(id: "a", name: "A", cwd: "~", prompt: "", days: days, model: model, effort: effort)).caption
+        }
+        #expect(caption(nil, nil) == "Every day")
+        #expect(caption("sonnet", "high", days: ["mon", "tue", "wed", "thu", "fri"]) == "Mon, Tue, Wed, Thu, Fri · Sonnet, high")
+        #expect(caption("claude-sonnet-5-5", nil) == "Every day · claude-sonnet-5-5")
+        #expect(caption(nil, "xhigh", days: ["fri"]) == "Fri · extra high effort")
+        #expect(caption("  ", "turbo") == "Every day", "blank model and unknown effort add nothing")
     }
 
     @Test("Folders: the home folder is written as ~, and expanded again for the open panel")

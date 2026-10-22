@@ -70,7 +70,7 @@ struct BulgeContentView: View {
         "\(Theme.branchGlyph) \(branch)"
     }
 
-    /// The row's status colour: amber for needs input, cyan working, the muted mint your turn, dimmed grey idle, mint finished, grey ended.
+    /// The row's status colour: amber for needs input, cyan working, the your-turn lime, dimmed grey idle, mint finished, grey ended.
     private var statusColor: Color {
         switch row.status {
         case .needsInput: Theme.needsInputColor.color

@@ -398,13 +398,14 @@ enum Theme {
     /// Active blob shape meaning (`--blob-shape <status|identity>` overrides it at launch).
     static let blobShapeMode: BlobShapeMode = .status
 
-    /// What the body (or eye) colour means. `.status`: the colour is the status (amber, cyan, muted
-    /// mint for your turn, warm grey for idle, the mint flash, grey) and identity is the shape preset
-    /// only. `.identity`: the seeded palette colour, amber only for needs input. `.project`: the project
-    /// colour (`ProjectColor`, by project key, so every session of one repo shares a hue) while the shape
-    /// still carries the status; needs input stays amber, just finished flashes mint, your turn keeps the
-    /// project colour, idle is the project colour dimmed, ended grey. In every mode your turn adds the
-    /// muted mint halo and edge cue.
+    /// What the body (or eye) colour means. `.status`: the colour is the status (amber, cyan, the lime
+    /// of your turn, warm grey for idle, the mint flash, grey) and identity is the shape preset only.
+    /// `.identity`: the seeded palette colour. `.project`: the project colour (`ProjectColor`, by project
+    /// key, so every session of one repo shares a hue) while the shape still carries the status; idle is
+    /// the project colour dimmed, ended grey. Two signal colours hold in every mode, so the faces that
+    /// want the person stand out from the working ones: needs input is amber (loudest: an action is
+    /// required) and your turn is `yourTurnColor` (louder than working, below amber), each with its halo
+    /// and edge cue. Just finished flashes mint in `.status` and `.project` mode and eases into the lime.
     enum ColorMode: String, CaseIterable, Sendable {
         case status, identity, project
 
@@ -418,7 +419,6 @@ enum Theme {
     static let colorMode: ColorMode = .project
     /// `.project` mode, idle: the project colour mixed this far toward black (0 = unchanged, 1 = black).
     /// A darker body reads as "resting" on the black capsule; a translucent one would just look faded.
-    /// Your turn keeps the project colour undimmed, so the step from your turn to idle is clear.
     static let projectIdleDim: Double = 0.6
 
     /// Needs input look: `.eyes` = amber surprised/awe eyes looking at you (default),
@@ -478,9 +478,11 @@ enum Theme {
     static let idleColor = EyeColor(name: "muted warm grey", red: 0.60, green: 0.59, blue: 0.55)
     /// Just finished: mint green flash, then on to the your-turn mint.
     static let justFinishedColor = EyeColor(name: "mint flash", red: 0.45, green: 1.00, blue: 0.72)
-    /// Your turn: a muted mint between the flash and idle. "Finished, ready for you", calm, clearly
-    /// below the amber of needs input.
-    static let yourTurnColor = EyeColor(name: "your turn mint", red: 0.56, green: 0.88, blue: 0.74)
+    /// Your turn, in every colour mode: a vivid lime "go" green (hue about 88 degrees), the one signal
+    /// besides amber. It pops on black, sits well clear of amber (36 degrees, needs input), of the
+    /// working cyan and of every project colour (`projectPalette` keeps out of 20 to 140 degrees), and is
+    /// yellower and more saturated than the mint flash it follows, so the done moment eases into it.
+    static let yourTurnColor = EyeColor(name: "your turn lime", red: 0.62, green: 1.00, blue: 0.20)
     /// Ended: dim grey line.
     static let endedColor = EyeColor(name: "dim grey", red: 0.42, green: 0.43, blue: 0.45)
     /// Duration of a colour change (fill and glow), seconds.
@@ -671,15 +673,17 @@ enum Theme {
     static let blobBounceScale: Double = 1.06
     static let blobBounceDuration: TimeInterval = 0.5
 
-    // MARK: Blob palette (`.identity` colour mode): eight body colours, none amber
+    // MARK: Blob palette (`.identity` colour mode): eight body colours, none amber, none lime
 
+    /// Seafoam replaced a sage at 105 degrees that sat on the hue of the your-turn lime (88 degrees)
+    /// and read as a duller copy of it beside a your-turn face.
     static let blobPalette: [EyeColor] = [
         EyeColor(name: "coral", red: 0.96, green: 0.47, blue: 0.42),
         EyeColor(name: "rose", red: 0.93, green: 0.52, blue: 0.72),
         EyeColor(name: "lavender", red: 0.70, green: 0.62, blue: 0.95),
         EyeColor(name: "sky", red: 0.47, green: 0.71, blue: 0.98),
         EyeColor(name: "teal", red: 0.28, green: 0.78, blue: 0.74),
-        EyeColor(name: "sage", red: 0.62, green: 0.80, blue: 0.56),
+        EyeColor(name: "seafoam", red: 0.52, green: 0.82, blue: 0.64),
         EyeColor(name: "cream", red: 0.93, green: 0.90, blue: 0.82),
         EyeColor(name: "slate", red: 0.63, green: 0.67, blue: 0.73),
     ]
@@ -873,9 +877,10 @@ enum Theme {
     /// The rim counts as spent this many sigmas beyond the fill's edge (2 % alpha left).
     static let haloTailSigmas: Double = 2
     /// Peak opacity of the amber halo, reached at the top of every grow; between grows it rests at
-    /// `attentionHaloRestFraction` of the peak, so the row is lit the whole time.
-    static let attentionHaloOpacity: Double = 0.55
-    static let attentionHaloRestFraction: Double = 0.55
+    /// `attentionHaloRestFraction` of the peak, so the row is lit the whole time. The loudest glow in the
+    /// panel: its peak and its rest stay above the your-turn halo's (`yourTurnHaloOpacity`).
+    static let attentionHaloOpacity: Double = 0.85
+    static let attentionHaloRestFraction: Double = 0.65
     /// A breathing halo (done, your turn) swings from this fraction of its peak opacity up to the peak
     /// and back (the breath's `BreathLoop.scale`). 0.3 left the glow invisible at the bottom of the
     /// breath on coral and purple project colours (snapshots); 0.4 still reads there.
@@ -913,14 +918,14 @@ enum Theme {
     /// How long a fresh idle period counts as your turn (unless the person opened the chat first).
     /// After it the session is plain idle. `sleepyAfter` is at least this long.
     static let yourTurnFor: TimeInterval = 15 * 60
-    /// The your-turn halo: `yourTurnColor`, this opacity at the peak (lower than the done halo),
-    /// breathing on `yourTurnHaloPulse`. The same breath as the done halo, so the 8 s done moment
-    /// eases into your turn without restarting the loop.
-    static let yourTurnHaloOpacity: Double = 0.5
+    /// The your-turn halo: `yourTurnColor`, this opacity at the peak (above the done halo, clearly below
+    /// amber's `attentionHaloOpacity`), breathing on `yourTurnHaloPulse`. The same breath as the done
+    /// halo, so the 8 s done moment eases into your turn without restarting the loop.
+    static let yourTurnHaloOpacity: Double = 0.65
     static let yourTurnHaloPulse: BreathLoop = doneHaloPulse
     /// The capsule edge cue of a your-turn row: `yourTurnColor` at this opacity at the top of its
-    /// breath (lower than amber's `attentionEdgeOpacity`), breathing with the halo.
-    static let yourTurnEdgeOpacity: Double = 0.85
+    /// breath (lower than amber's `attentionEdgeOpacity`, and it dips further), breathing with the halo.
+    static let yourTurnEdgeOpacity: Double = 0.9
     /// The done moment easing into your turn: the eyes glide to the your-turn gaze in this long
     /// (no blink: the shape stays the pill), colour and halo cross-fade alongside.
     static let yourTurnGlideDuration: TimeInterval = 0.45
@@ -948,10 +953,13 @@ enum Theme {
     // MARK: Capsule edge cue (a thin amber line beside a waiting row)
 
     /// Width of the line along the capsule's left edge, its length (fraction of the row pitch) and its
-    /// opacity at the top of the pulse; it pulses with the row's halo and rests at the same fraction.
+    /// opacity at the top of the pulse; it pulses with the row's halo and rests at
+    /// `attentionEdgeRestFraction` of the peak, higher than the your-turn cue ever dips, so the amber
+    /// line stays the louder one through the whole loop.
     static let attentionEdgeWidth: CGFloat = 2
     static let attentionEdgeLengthFraction: CGFloat = 0.62
-    static let attentionEdgeOpacity: Double = 0.9
+    static let attentionEdgeOpacity: Double = 1
+    static let attentionEdgeRestFraction: Double = 0.7
     /// Inset of the line from the capsule's left edge (0 = flush with the edge).
     static let attentionEdgeInset: CGFloat = 0
 
@@ -1026,11 +1034,13 @@ enum Theme {
     static let projectDotSize: CGFloat = 6
     static let projectDotGap: CGFloat = 5
     /// Ten project colours, picked by a hash of the project key; the dot in the bulge and, in `.project`
-    /// colour mode, the whole body. All vivid on black and none amber-like: the hue wheel runs from
-    /// crimson through coral (8 degrees, the warm end) back round through pink, magenta, blue and teal to
-    /// green (128 degrees); nothing between 20 and 120 degrees, so amber (35 degrees, needs input) and
-    /// yellow keep a wide gap, and nothing in the violet wedge (245 to 275 degrees), which belongs to the
-    /// lavender of the action faces. The lightest (sky, green) still hold the ink eyes.
+    /// colour mode, the whole body. All vivid on black and none like a signal colour: the hue wheel runs
+    /// from crimson through coral (8 degrees, the warm end) back round through pink, magenta, blue and
+    /// teal to emerald (152 degrees); nothing between 20 and 140 degrees, so amber (35 degrees, needs
+    /// input), yellow and the your-turn lime (88 degrees) keep a wide gap, and nothing in the violet wedge
+    /// (245 to 275 degrees), which belongs to the lavender of the action faces. Emerald replaced a green
+    /// at 128 degrees that read as a duller your-turn lime; it is deeper than the mint flash. The
+    /// lightest (sky) still holds the ink eyes.
     static let projectPalette: [EyeColor] = [
         EyeColor(name: "crimson", red: 0.98, green: 0.22, blue: 0.36),
         EyeColor(name: "coral", red: 1.00, green: 0.50, blue: 0.42),
@@ -1041,7 +1051,7 @@ enum Theme {
         EyeColor(name: "blue", red: 0.36, green: 0.68, blue: 1.00),
         EyeColor(name: "sky", red: 0.38, green: 0.86, blue: 1.00),
         EyeColor(name: "teal", red: 0.24, green: 0.90, blue: 0.78),
-        EyeColor(name: "green", red: 0.44, green: 0.90, blue: 0.50),
+        EyeColor(name: "emerald", red: 0.12, green: 0.86, blue: 0.50),
     ]
     /// Branch line (`⎇ main`): grey, 10 pt, truncated at the tail.
     static let branchColor = Color(white: 0.6)
