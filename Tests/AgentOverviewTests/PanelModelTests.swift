@@ -133,7 +133,7 @@ struct PanelModelTests {
         var waiting = try TestSupport.fixtureRecord("waiting-desktop")
         idle.pid = TestSupport.livePid
         busy.pid = TestSupport.otherLivePid
-        waiting.pid = TestSupport.livePid + 2
+        waiting.pid = TestSupport.keeperPid
         let pids: Set<pid_t> = [idle.pid, busy.pid, waiting.pid]
         store.reconcile(RegistryScanResult(records: [idle, busy], presentPids: pids))
         #expect(model.rows.map(\.pid) == [busy.pid, idle.pid])
@@ -197,7 +197,7 @@ struct PanelModelTests {
         var waiting = try TestSupport.fixtureRecord("waiting-desktop")
         idle.pid = TestSupport.livePid
         busy.pid = TestSupport.otherLivePid
-        waiting.pid = TestSupport.livePid + 2
+        waiting.pid = TestSupport.keeperPid
         store.reconcile(RegistryScanResult(records: [idle, busy, waiting], presentPids: [idle.pid, busy.pid, waiting.pid]))
         let model = PanelModel(store: store, expandMode: expandMode)
         let recorder = WindowStateRecorder()

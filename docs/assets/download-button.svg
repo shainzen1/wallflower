@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="64" viewBox="0 0 280 64" role="img" aria-labelledby="title">
+  <title id="title">Download Wallflower for macOS (macOS 26 or later)</title>
+  <defs>
+    <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1C1C1F"/>
+      <stop offset="1" stop-color="#0A0A0B"/>
+    </linearGradient>
+  </defs>
+  <rect x="0.5" y="0.5" width="279" height="63" rx="31.5" fill="url(#fill)" stroke="#3A3A3E"/>
+  <g fill="none" stroke="#F5F5F7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M51 19.5v15.5M44.5 28.5l6.5 6.5 6.5-6.5M42 43.5h18"/>
+  </g>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+    <text x="77" y="30" font-size="18" font-weight="600" fill="#F5F5F7">Download for macOS</text>
+    <text x="77" y="47" font-size="12" fill="#9A988F">macOS 26 or later · free</text>
+  </g>
+</svg>

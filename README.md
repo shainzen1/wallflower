@@ -6,6 +6,10 @@
 
 <p align="center">Your Claude Code sessions, waiting quietly at the edge of your screen.</p>
 
+<p align="center">
+  <a href="https://github.com/shainzen1/wallflower/releases/latest/download/Wallflower.dmg"><img src="docs/assets/download-button.svg" width="280" height="64" alt="Download Wallflower for macOS (macOS 26 or later)"></a>
+</p>
+
 ![Wallflower on the right edge of a dark desktop: a black capsule with four session faces and an action star. The top face is an amber drop, and its bulge reads "Plan the migration, Needs input, 2m".](docs/assets/hero.png)
 
 ## What it is
@@ -33,18 +37,19 @@ Colours depend on the Colour setting. With **Status**, amber means needs input, 
 
 ## Install
 
-1. Download the zip from the [latest release](https://github.com/shainzen1/wallflower/releases/latest), unzip it and move **Wallflower.app** to your Applications folder.
-2. Open it. Wallflower is not notarized by Apple yet, so macOS blocks the first launch. Go to **System Settings > Privacy & Security**, scroll down and click **Open Anyway**. Or clear the quarantine flag in Terminal:
+1. Download **[Wallflower.dmg](https://github.com/shainzen1/wallflower/releases/latest/download/Wallflower.dmg)**, the newest version (the button above is the same file; every version is on the [releases page](https://github.com/shainzen1/wallflower/releases)).
+2. Open it and drag **Wallflower** onto the **Applications** folder in the window that appears. Then eject the disk image (the eject button next to it in the Finder sidebar) and delete the download if you like.
+3. Open Wallflower from Applications. It is not notarized by Apple yet, so the first launch stops with a message that Apple could not verify Wallflower is free of malware. Click **Done**, go to **System Settings > Privacy & Security**, scroll down and click **Open Anyway**. You only do this once. Or clear the quarantine flag in Terminal before the first launch:
 
    ```sh
    xattr -dr com.apple.quarantine /Applications/Wallflower.app
    ```
 
-3. A short welcome tour opens. The capsule sits on the right edge of your main display (**Settings > General > Panel side** moves it to the left edge), and a small blob appears in the menu bar.
+4. A short welcome tour opens. The capsule sits on the right edge of your main display (**Settings > General > Panel side** moves it to the left edge), and a small blob appears in the menu bar.
 
 ### Updates
 
-Wallflower checks for a new version once a week and shows what changed. Nothing downloads until you click **Install Update**; the new version then replaces the old one in place and relaunches. **Check for Updates…** in the menu bar menu checks right away, and **Settings > General > Check for updates automatically** turns the weekly check off. Version 0.1.0 has no updater yet: download 0.1.1 or later by hand once, and every update after that arrives in the app.
+Wallflower checks for a new version once a week and shows what changed. Nothing downloads until you click **Install Update**; the new version then replaces the old one in place and relaunches. **Check for Updates…** in the menu bar menu checks right away, and **Settings > General > Check for updates automatically** turns the weekly check off. Updates come as a zip next to the disk image on each release; you never need to download it yourself. Version 0.1.0 has no updater yet: download the disk image by hand once, and every update after that arrives in the app.
 
 ### Build from source
 
@@ -181,9 +186,7 @@ Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](C
 
 ## Support
 
-Wallflower is free. If it makes your day a little calmer, a star on GitHub helps others find it, and a coffee keeps it going.
-
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/shainzen1)
+Wallflower is free. If it makes your day a little calmer, a star on GitHub helps others find it.
 
 ## Credits
 
@@ -191,6 +194,8 @@ Made by [Shain Gerstner](https://github.com/shainzen1) at [osoro.studio](https:/
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT License with Commons Clause: free to use, change and share, not to sell. See [LICENSE](LICENSE). Versions up to 0.1.1 were released under the plain MIT License.
+
+Wallflower ships [Sparkle](https://sparkle-project.org) for in-app updates, under its own MIT license; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Not affiliated with or endorsed by Anthropic. Claude is a trademark of Anthropic.

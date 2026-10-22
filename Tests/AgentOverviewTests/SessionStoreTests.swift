@@ -34,7 +34,7 @@ struct SessionStoreTests {
         #expect(store.sessions.first === session)
 
         // A second, idle session with a more recent state change sorts above the first one.
-        let pid2 = TestSupport.livePid + 50_000  // dead pid: must be filtered out as stale
+        let pid2 = TestSupport.deadPid  // must be filtered out as stale
         try TestSupport.writeFixture("idle-desktop", to: folder, pid: pid2, statusUpdatedAt: 3_000_000)
         try await Task.sleep(for: .milliseconds(200))
         #expect(store.sessions.count == 1, "a file whose pid is dead must not become a session")

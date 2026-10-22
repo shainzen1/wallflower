@@ -31,5 +31,5 @@ enum AppInfo {
     /// The donation page (Buy Me a Coffee, GitHub Sponsors, Ko-fi). nil in the source: `scripts/publish.sh`
     /// fills it in the export (`--bmc <handle>`). While nil, the About tab's coffee button shows disabled in a
     /// debug build and is left out of a release build.
-    static let sponsorURL: URL? = URL(string: "https://buymeacoffee.com/shainzen1")
+    static let sponsorURL: URL? = nil
 }

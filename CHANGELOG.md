@@ -4,6 +4,23 @@ All notable changes to Wallflower are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-10-22
+
+### Added
+
+- A disk image to install from: open `Wallflower.dmg` and drag Wallflower onto Applications in its window, no zip to unpack. Every release carries it under that same name, so [the latest download link](https://github.com/shainzen1/wallflower/releases/latest/download/Wallflower.dmg) always gets the newest version.
+- A **Download for macOS** button at the top of the README, straight to that disk image.
+
+### Changed
+
+- Install instructions in the README and the release notes start from the disk image. The versioned zip stays on every release as the payload of in-app updates; you never need to download it.
+- License: from this version on, Wallflower is under the MIT License with the Commons Clause: free to use, change and share, but not to sell. Versions up to 0.1.1 stay under the plain MIT License. Settings > About and the app's Info say so.
+- The app carries the license texts in `Contents/Resources`: its own and that of [Sparkle](https://sparkle-project.org), which it bundles for updates. `THIRD_PARTY_NOTICES.md` lists Sparkle's notices.
+
+### Removed
+
+- The Buy me a coffee button in Settings > About and the donation links in the README and on GitHub: the donation page does not exist yet. They come back once it does.
+
 ## [0.1.1] - 2026-10-22
 
 ### Changed
@@ -43,5 +60,6 @@ The first public release.
 
 - The welcome's Set up page keeps the "Where do you run Claude Code?" choice and the Launch at login switch inside their card.
 
+[0.1.2]: https://github.com/shainzen1/wallflower/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/shainzen1/wallflower/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/shainzen1/wallflower/releases/tag/v0.1.0

@@ -283,7 +283,7 @@ struct PanelActionTests {
         var records: [SessionRecord] = []
         for index in 0..<sessions {
             var record = try TestSupport.fixtureRecord(index == 0 ? "waiting-desktop" : index == 1 ? "busy-desktop" : "idle-desktop")
-            record.pid = TestSupport.livePid + pid_t(index)
+            record.pid = TestSupport.livePids[index]
             records.append(record)
         }
         store.reconcile(RegistryScanResult(records: records, presentPids: Set(records.map(\.pid))))

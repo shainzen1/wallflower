@@ -45,7 +45,7 @@ struct AboutSettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
             } footer: {
-                Text("MIT License. Not affiliated with Anthropic.")
+                Text("MIT License with Commons Clause. Not affiliated with Anthropic.")
                     .font(.footnote)
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity)

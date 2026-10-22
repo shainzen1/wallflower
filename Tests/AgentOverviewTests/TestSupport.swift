@@ -13,6 +13,13 @@ enum TestSupport {
     /// A second live pid: the process that launched the tests, alive for the whole run. (`livePid + 1`
     /// is often no process at all, and the store ends a session whose process is gone.)
     static let otherLivePid = getppid()
+    /// A third live pid: a helper process that lives exactly as long as the test run (`Keeper`).
+    static let keeperPid = Keeper.shared.pid
+    /// Pids for tests that show several sessions at once, each alive for the whole run. Never
+    /// `livePid + n`: that is often no process at all, or a short-lived one another test started, and
+    /// the store ends a session whose process is gone (its exit source fires at once for a missing
+    /// pid) and drops the row after `DataTuning.endedLinger`. A test that ran past that lost rows.
+    static let livePids: [pid_t] = [livePid, otherLivePid, keeperPid]
     /// Far above the macOS pid range (99998), so no process can have it.
     static let deadPid: pid_t = 2_147_483_000
 
@@ -129,5 +136,27 @@ enum TestSupport {
 extension SessionKey: ExpressibleByIntegerLiteral {
     public init(integerLiteral value: Int32) {
         self = .claude(value)
+    }
+}
+
+/// The process behind `TestSupport.keeperPid`: `/bin/cat` reading a pipe that only the test process
+/// writes to. However the run ends, the pipe closes with it and cat exits, so nothing outlives it.
+/// Started on first use, never changed afterwards.
+private final class Keeper: @unchecked Sendable {
+    static let shared = Keeper()
+    private let process = Process()
+    private let input = Pipe()
+
+    var pid: pid_t { process.processIdentifier }
+
+    private init() {
+        process.executableURL = URL(filePath: "/bin/cat")
+        process.standardInput = input
+        process.standardOutput = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            fatalError("Could not start the keeper process: \(error)")
+        }
     }
 }

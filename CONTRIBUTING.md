@@ -49,4 +49,4 @@ If a change needs to break one of these, say so in the pull request and explain 
 
 Swift 6 language mode, strict concurrency. Match the code around you. Comments explain why, and measurements that led to a decision are worth writing down. In docs and UI text, keep it short and plain, use sentence-case headings, and skip em and en dashes.
 
-By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).
+By contributing, you agree that your contributions are licensed under the same terms as the project: the [MIT License with Commons Clause](LICENSE).

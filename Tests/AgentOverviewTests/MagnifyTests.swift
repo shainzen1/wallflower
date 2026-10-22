@@ -77,7 +77,7 @@ struct MagnifyTests {
         var waiting = try TestSupport.fixtureRecord("waiting-desktop")
         idle.pid = TestSupport.livePid
         busy.pid = TestSupport.otherLivePid
-        waiting.pid = TestSupport.livePid + 2
+        waiting.pid = TestSupport.keeperPid
         store.reconcile(RegistryScanResult(records: [idle, busy, waiting], presentPids: [idle.pid, busy.pid, waiting.pid]))
         let model = PanelModel(store: store)
         #expect(model.hoverEffect == .magnify)
