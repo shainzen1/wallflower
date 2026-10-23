@@ -153,11 +153,13 @@ final class PanelWindow: NSPanel {
     // MARK: Auto-hide
 
     /// Slides the content off the screen edge (`concealed`) or back, along the edge normal: a Core
-    /// Animation move of the content view's sublayer transform by the window's width with a strong
-    /// ease-out (`Theme.autoHideSlideDuration`, `autoHideSlideCurve`), so the capsule disappears into
-    /// the edge and the window clips it; nothing runs once it landed. The window frame never moves, so
-    /// nothing shows on a display beyond a shared edge. Reduce Motion: a fade instead. Concealed, the
-    /// window ignores the pointer and the edge trigger takes over (`EdgeTriggerWindow`).
+    /// Animation move of the content view's sublayer transform by the window's width, the Dock's
+    /// ease-in away into the edge and ease-out back (`AutoHideSlide`), so the capsule disappears into
+    /// the edge and the window clips it; nothing runs once it landed. A slide that turns another
+    /// around starts where that one is on screen and takes the share of the time its distance needs.
+    /// The window frame never moves, so nothing shows on a display beyond a shared edge. Reduce
+    /// Motion: a fade instead. Concealed, the window ignores the pointer and the edge trigger takes
+    /// over (`EdgeTriggerWindow`).
     func setConcealed(_ concealed: Bool, animated: Bool) {
         guard concealed != isConcealed else { return }
         isConcealed = concealed
@@ -177,12 +179,15 @@ final class PanelWindow: NSPanel {
             contentView?.alphaValue = CGFloat(opacity)
             CATransaction.commit()
             if animated {
-                let curve = Theme.autoHideSlideCurve
                 if !CATransform3DEqualToTransform(fromSlide, slide) {
+                    let motion = AutoHideSlide.toward(concealed: concealed)
+                    let curve = motion.curve
+                    // The slide only translates along x: the share of the full travel still ahead.
+                    let remaining = frame.width > 0 ? abs(Double(slide.m41 - fromSlide.m41) / Double(frame.width)) : 1
                     let animation = CABasicAnimation(keyPath: "sublayerTransform")
                     animation.fromValue = NSValue(caTransform3D: fromSlide)
                     animation.toValue = NSValue(caTransform3D: slide)
-                    animation.duration = Theme.autoHideSlideDuration
+                    animation.duration = motion.duration(remaining: remaining)
                     animation.timingFunction = CAMediaTimingFunction(controlPoints: curve.0, curve.1, curve.2, curve.3)
                     layer.add(animation, forKey: "autoHideSlide")
                 }

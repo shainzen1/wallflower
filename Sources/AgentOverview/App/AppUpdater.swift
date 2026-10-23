@@ -36,8 +36,25 @@ final class AppUpdater {
     private(set) var automaticallyChecks = false
     /// When Sparkle last asked the feed, nil before the first check.
     private(set) var lastCheckDate: Date?
-    /// The version a scheduled check found while its alert waits for the person: the menu offers it.
+    /// The newer version the last check found, until the person installs or skips it: the menu offers
+    /// it and the menu bar glyph turns green. See `pendingVersion(after:current:)` for when it clears.
     private(set) var pendingVersion: String?
+
+    /// What happened to an update, for `pendingVersion(after:current:)`.
+    enum UpdateEvent: Equatable, Sendable {
+        /// A check, scheduled or "Check for Updates…", found this version (its display version).
+        case found(String)
+        /// A check found nothing newer: up to date, or the newer version was skipped before.
+        case upToDate
+        /// The person's choice in Sparkle's update window.
+        case chose(Choice)
+
+        enum Choice: Equatable, Sendable {
+            case install, skip
+            /// "Remind Me Later", or closing the window.
+            case later
+        }
+    }
 
     @ObservationIgnored private let controller: SPUStandardUpdaterController?
     @ObservationIgnored private let delegate: Delegate
@@ -48,8 +65,10 @@ final class AppUpdater {
     ///   - relaunches: whether "Install and Relaunch" opens the new version. A scripted launch says no:
     ///     the relaunched app would come up without its launch arguments, on the real data.
     ///   - info: the bundle's Info.plist, for the public key.
-    init(start: Bool, relaunches: Bool = true, info: [String: Any]? = Bundle.main.infoDictionary) {
+    ///   - fakePendingVersion: start as if a check had found this version (`--fake-pending-update`).
+    init(start: Bool, relaunches: Bool = true, info: [String: Any]? = Bundle.main.infoDictionary, fakePendingVersion: String? = nil) {
         delegate = Delegate(relaunches: relaunches)
+        pendingVersion = fakePendingVersion
         let reason: OffReason? = !start ? .scriptedLaunch : !Self.hasPublicKey(info) ? .noPublicKey : nil
         offReason = reason
         guard reason == nil else {
@@ -95,6 +114,26 @@ final class AppUpdater {
         automaticallyChecks = controller.updater.automaticallyChecksForUpdates
     }
 
+    /// The waiting version after `event`. It stays through everything that leaves the update offered:
+    /// "Remind Me Later" (Sparkle drops the update then and only finds it again at the next weekly
+    /// check), merely looking at the window, a failed download, a failed check. Install keeps it too:
+    /// the relaunch into the new version ends this process, and if the install fails the update still
+    /// waits. It clears when the person skips the version or a check finds nothing newer, and a newer
+    /// find replaces it.
+    nonisolated static func pendingVersion(after event: UpdateEvent, current: String?) -> String? {
+        switch event {
+        case .found(let version): version
+        case .upToDate, .chose(.skip): nil
+        case .chose(.install), .chose(.later): current
+        }
+    }
+
+    private func record(_ event: UpdateEvent) {
+        let new = Self.pendingVersion(after: event, current: pendingVersion)
+        // Only a change reaches the observers (the menu bar glyph redraws on it).
+        if new != pendingVersion { pendingVersion = new }
+    }
+
     /// The menu item: the waiting update while there is one, else the plain check.
     nonisolated static func menuTitle(pendingVersion: String?) -> String {
         pendingVersion.map { "Install \(AppInfo.name) \($0)…" } ?? "Check for Updates…"
@@ -122,8 +161,8 @@ final class AppUpdater {
     // MARK: Sparkle delegates
 
     /// Sparkle's delegates must be `NSObject`s. Logs what the updater does (one line per event, no
-    /// personal data) and keeps the gentle reminder: a scheduled check that finds an update while the
-    /// app is in the background also shows it in the menu, until the person looks at it.
+    /// personal data) and keeps the gentle reminder: an update a check found shows in the menu and
+    /// tints the menu bar glyph until the person installs or skips it (`pendingVersion(after:current:)`).
     @MainActor
     private final class Delegate: NSObject, SPUUpdaterDelegate, @preconcurrency SPUStandardUserDriverDelegate {
         let relaunches: Bool
@@ -135,10 +174,22 @@ final class AppUpdater {
 
         func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
             NSLog("\(AppInfo.name): update found: %@ (build %@)", item.displayVersionString, item.versionString)
+            owner?.record(.found(item.displayVersionString))
         }
 
         func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
             NSLog("\(AppInfo.name): update check: up to date")
+            owner?.record(.upToDate)
+        }
+
+        func updater(_ updater: SPUUpdater, userDidMake choice: SPUUserUpdateChoice, forUpdate updateItem: SUAppcastItem, state: SPUUserUpdateState) {
+            let made: UpdateEvent.Choice = switch choice {
+            case .install: .install
+            case .skip: .skip
+            default: .later
+            }
+            NSLog("\(AppInfo.name): update %@: %@", updateItem.displayVersionString, "\(made)")
+            owner?.record(.chose(made))
         }
 
         func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
@@ -163,17 +214,11 @@ final class AppUpdater {
 
         var supportsGentleScheduledUpdateReminders: Bool { true }
 
+        /// Sparkle still shows the window itself; this is the gentle reminder's entry point, the same
+        /// version `didFindValidUpdate` recorded (no second change). Neither looking at the window nor
+        /// the end of the session clears it (see `pendingVersion(after:current:)`).
         func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
-            guard !state.userInitiated else { return }
-            owner?.pendingVersion = update.displayVersionString
-        }
-
-        func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
-            owner?.pendingVersion = nil
-        }
-
-        func standardUserDriverWillFinishUpdateSession() {
-            owner?.pendingVersion = nil
+            owner?.record(.found(update.displayVersionString))
         }
     }
 }

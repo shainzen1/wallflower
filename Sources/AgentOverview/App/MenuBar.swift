@@ -1,15 +1,16 @@
 import AppKit
 import Observation
 
-/// The status item: the blob glyph (`MenuBarIcon`, the drop while a session needs input) and the
-/// app menu. The menu is rebuilt each time it opens: a status line, the sessions themselves (click
-/// opens one like the panel does), panel visibility and position, Settings, the update check, the
-/// welcome, Quit.
+/// The status item: the blob glyph (`MenuBarIcon`, the drop while a session needs input, green while
+/// an update waits) and the app menu. The menu is rebuilt each time it opens: a status line, the
+/// sessions themselves (click opens one like the panel does), panel visibility and position,
+/// Settings, the update check, the welcome, Quit.
 ///
-/// The glyph follows the sessions: `observe()` tracks `Actions.needsInputCount` (whatever it reads,
-/// the store's sessions and their states) and redraws the image only when the aggregate (any session
-/// needs input) changes. No timers. `AppDelegate` calls `observe()` again whenever the source of the
-/// rows changed (the store or the panel model was replaced).
+/// The glyph follows the sessions and the updater: `observe()` tracks `Actions.needsInputCount`
+/// (whatever it reads, the store's sessions and their states) and `Actions.pendingUpdate` (the
+/// updater's waiting version, green while there is one), and redraws the image only when the
+/// aggregate (any session needs input, which update waits) changes. No timers. `AppDelegate` calls
+/// `observe()` again whenever the source of the rows changed (the store or the panel model was replaced).
 @MainActor
 final class MenuBar: NSObject, NSMenuDelegate {
     /// What the menu items do. `AppDelegate` fills it in.
@@ -27,8 +28,10 @@ final class MenuBar: NSObject, NSMenuDelegate {
         var resetPosition: () -> Void = {}
         var openSettings: () -> Void = {}
         var showWelcome: () -> Void = {}
-        /// "Check for Updates…", or the update a scheduled check found (`AppUpdater.menuTitle`).
+        /// "Check for Updates…", or the update a check found (`AppUpdater.menuTitle`).
         var updateTitle: () -> String = { AppUpdater.menuTitle(pendingVersion: nil) }
+        /// The update waiting to be installed (read under observation: the glyph turns green).
+        var pendingUpdate: () -> String? = { nil }
         var canCheckForUpdates: () -> Bool = { false }
         var checkForUpdates: () -> Void = {}
     }
@@ -40,7 +43,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     var actions: Actions
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     /// The glyph on screen, so an unchanged aggregate never redraws it.
-    private(set) var glyph: MenuBarIcon.Glyph?
+    private(set) var icon: MenuBarIcon.State?
     /// Rows by menu item tag while the menu is open.
     private var listedRows: [Int: SessionRow] = [:]
     /// Bumped per `observe()`, so a change reported for a replaced store or model is dropped.
@@ -52,10 +55,11 @@ final class MenuBar: NSObject, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
         statusItem.menu = menu
-        setGlyph(.calm)
+        setIcon(MenuBarIcon.State(glyph: .calm))
     }
 
-    /// Follows `actions.needsInputCount` (again after its source was replaced): the glyph and the tooltip.
+    /// Follows `actions.needsInputCount` and `actions.pendingUpdate` (again after their source was
+    /// replaced): the glyph, its colour and the tooltip.
     func observe() {
         observationGeneration += 1
         track(generation: observationGeneration)
@@ -120,8 +124,9 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     private func track(generation: Int) {
         let count = actions.needsInputCount
-        let needsInput = withObservationTracking {
-            count()
+        let update = actions.pendingUpdate
+        let (needsInput, pendingUpdate) = withObservationTracking {
+            (count(), update())
         } onChange: { [weak self] in
             // Fires once, before the change lands: read the new state on the next turn, then track again.
             DispatchQueue.main.async {
@@ -131,12 +136,12 @@ final class MenuBar: NSObject, NSMenuDelegate {
                 }
             }
         }
-        setGlyph(MenuBarIcon.glyph(needsInputCount: needsInput))
+        setIcon(MenuBarIcon.State(glyph: MenuBarIcon.glyph(needsInputCount: needsInput), pendingUpdate: pendingUpdate))
     }
 
-    private func setGlyph(_ new: MenuBarIcon.Glyph) {
-        guard new != glyph else { return }
-        glyph = new
+    private func setIcon(_ new: MenuBarIcon.State) {
+        guard new != icon else { return }
+        icon = new
         statusItem.button?.image = MenuBarIcon.image(new)
         statusItem.button?.toolTip = new.accessibilityDescription
     }

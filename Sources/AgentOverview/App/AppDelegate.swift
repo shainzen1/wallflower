@@ -71,7 +71,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appliedHiddenTools = settings.hiddenAgentTools
         appliedLook.applyToFaceLook()
 
-        let updater = AppUpdater(start: arguments.runsUpdater, relaunches: arguments.defaultsSuite == nil)
+        let updater = AppUpdater(
+            start: arguments.runsUpdater, relaunches: arguments.defaultsSuite == nil, fakePendingVersion: arguments.pendingUpdateOverride
+        )
         self.updater = updater
 
         let store = makeStore(for: appliedSource)
@@ -123,6 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openSettings: { [weak self] in self?.openSettings() },
             showWelcome: { [weak self] in self?.showWelcome() },
             updateTitle: { [weak self] in AppUpdater.menuTitle(pendingVersion: self?.updater.pendingVersion) },
+            pendingUpdate: { [weak self] in self?.updater.pendingVersion },
             canCheckForUpdates: { [weak self] in self?.updater.canCheckForUpdates == true },
             checkForUpdates: { [weak self] in self?.updater.checkForUpdates() }
         ))
@@ -645,7 +648,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(500))
             menuBar.menuNeedsUpdate(menuBar.menu)
-            NSLog("\(AppInfo.name): menu glyph %@", menuBar.glyph.map { "\($0)" } ?? "none")
+            NSLog("\(AppInfo.name): menu glyph %@%@", menuBar.icon.map { "\($0.glyph)" } ?? "none",
+                  menuBar.icon?.pendingUpdate.map { " (green, update \($0))" } ?? "")
             for item in menuBar.menu.items {
                 if item.isSeparatorItem {
                     NSLog("\(AppInfo.name): menu ----")

@@ -50,6 +50,32 @@ enum PanelAutoHide: String, CaseIterable, Sendable {
     }
 }
 
+/// One direction of the slide off the edge and back, the way the Dock moves: an ease-in that
+/// accelerates away into the edge (`Theme.autoHideConcealDuration`, `autoHideConcealCurve`) and an
+/// ease-out that decelerates back into place (`autoHideRevealDuration`, `autoHideRevealCurve`).
+/// Free of Core Animation so tests check it; `PanelWindow.setConcealed` applies it.
+struct AutoHideSlide: Sendable {
+    /// Length of the full slide, edge to place or place to edge.
+    let duration: TimeInterval
+    /// Cubic Bezier control points of the timing curve.
+    let curve: (Float, Float, Float, Float)
+
+    /// The slide off the edge (`concealed`) or back.
+    static func toward(concealed: Bool) -> AutoHideSlide {
+        concealed
+            ? AutoHideSlide(duration: Theme.autoHideConcealDuration, curve: Theme.autoHideConcealCurve)
+            : AutoHideSlide(duration: Theme.autoHideRevealDuration, curve: Theme.autoHideRevealCurve)
+    }
+
+    /// The length for a slide that starts `remaining` of the full travel (0 to 1) from its end, as
+    /// when a reveal turns a hide around halfway. Scaled by the square root of that share (an
+    /// accelerating move's time grows with the root of its distance): a short turn-around is quick
+    /// without snapping, a full slide takes the full `duration`.
+    func duration(remaining: Double) -> TimeInterval {
+        duration * min(max(remaining, 0), 1).squareRoot()
+    }
+}
+
 /// The auto-hide sequencing, free of AppKit so tests drive it: whether the panel is out or slid off
 /// the edge (`setConcealed`), from the mode's rule (`PanelAutoHide.restsHidden`), the pointer and the
 /// welcome window. `AppDelegate` feeds it the store counts, the edge trigger and the pointer moves,

@@ -4,6 +4,8 @@ import AppKit
 /// with two eye cut-outs, built from the faces' own geometry (`BlobShape` profiles, the eye placement
 /// of `BlobEyes`). At rest it is the idle capsule with calm eyes; while a session needs input it
 /// becomes the drop with the wide eyes of a waiting face, so the menu bar carries the panel's signal.
+/// While an update waits to be installed the same glyph is filled in the palette's emerald instead of
+/// the template ink, whichever shape it has, so the person notices and opens the menu.
 /// The flat edges and the eyes sit on whole points, so the glyph is crisp at 1x as well as 2x.
 enum MenuBarIcon {
     enum Glyph: Equatable, CaseIterable {
@@ -44,22 +46,59 @@ enum MenuBarIcon {
         }
     }
 
+    /// What the status item shows: the glyph, green while an update waits. The update does not change
+    /// the shape: a session that needs input still shows the drop, in green.
+    struct State: Equatable {
+        var glyph: Glyph
+        /// The version of the update that waits to be installed (`AppUpdater.pendingVersion`).
+        var pendingUpdate: String?
+
+        var accessibilityDescription: String {
+            guard let pendingUpdate else { return glyph.accessibilityDescription }
+            return "\(glyph.accessibilityDescription), update \(pendingUpdate) ready to install"
+        }
+    }
+
     /// Size of the template image in points.
     static let size = NSSize(width: 18, height: 18)
     /// Longest side of the silhouette inside the image, in points.
     static let bodyExtent: CGFloat = 16
+    /// How much darker the emerald is on a light menu bar: the palette's emerald is made for black and
+    /// is too light on a light grey bar (about 1.6:1); this deeper green holds about 3.5:1. A dark bar
+    /// gets the emerald itself.
+    static let lightBarUpdateDim = 0.35
 
-    static func image(_ glyph: Glyph) -> NSImage {
+    /// The template image, or with `pendingUpdate` a coloured one in `updateInk`. The colour is picked
+    /// while drawing, from the appearance the status item draws in, so it follows the menu bar between
+    /// light and dark (with the wallpaper) without being set again.
+    static func image(_ glyph: Glyph, pendingUpdate: String? = nil) -> NSImage {
+        let state = State(glyph: glyph, pendingUpdate: pendingUpdate)
+        let tinted = pendingUpdate != nil
         let image = NSImage(size: size, flipped: false) { rect in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
             context.addPath(path(glyph, in: rect))
-            context.setFillColor(NSColor.black.cgColor)
+            context.setFillColor(tinted ? updateInk(darkBar: isDark(.currentDrawing())) : NSColor.black.cgColor)
             context.fillPath(using: .evenOdd)
             return true
         }
-        image.isTemplate = true
-        image.accessibilityDescription = glyph.accessibilityDescription
+        image.isTemplate = !tinted
+        image.accessibilityDescription = state.accessibilityDescription
         return image
+    }
+
+    static func image(_ state: State) -> NSImage {
+        image(state.glyph, pendingUpdate: state.pendingUpdate)
+    }
+
+    /// The glyph's fill while an update waits: the emerald on a dark bar, deepened on a light one.
+    static func updateInk(darkBar: Bool) -> CGColor {
+        darkBar ? Theme.emeraldColor.cgColor : Theme.emeraldColor.dimmed(lightBarUpdateDim).cgColor
+    }
+
+    /// Whether `appearance` (the menu bar's vibrant light or dark, or plain aqua) is a dark one.
+    static func isDark(_ appearance: NSAppearance) -> Bool {
+        let match = appearance.bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark])
+        return match == .darkAqua || match == .vibrantDark
     }
 
     /// The glyph's outline in `rect` (y up): the body and the two eyes, to be filled even-odd so the

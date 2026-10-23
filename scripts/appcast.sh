@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
     shift 2
 done
 
-[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || fail "--version must look like 0.1.1."
+[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || fail "--version must look like 1.4."
 [[ "$BUILD" =~ ^[0-9]+(\.[0-9]+)*$ ]] || fail "--build must be a number like 2."
 [[ "$MINIMUM" =~ ^[0-9]+(\.[0-9]+)*$ ]] || fail "--minimum-system must look like 26.0."
 [[ "$URL" =~ ^https?://[^[:space:]\"\<\>]+$ ]] || fail "--url must be an http(s) URL."

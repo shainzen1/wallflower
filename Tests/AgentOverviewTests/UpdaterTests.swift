@@ -76,5 +76,31 @@ struct UpdaterTests {
         #expect(LaunchArguments(["app", "--check-for-updates", "ui"]).checkForUpdates == .ui)
         #expect(LaunchArguments(["app", "--check-for-updates", "background"]).checkForUpdates == .background)
         #expect(LaunchArguments(["app", "--check-for-updates", "later"]).checkForUpdates == nil)
+        #expect(LaunchArguments(["app", "--defaults-suite", "check", "--fake-pending-update", "1.4"]).pendingUpdateOverride == "1.4")
+        #expect(LaunchArguments(["app", "--fake-pending-update", "1.4"]).pendingUpdateOverride == nil, "only in a scripted launch")
+    }
+
+    /// The green glyph and "Install Wallflower 1.4…" share `pendingVersion`: they show from the find
+    /// until the person installs (the relaunch ends the process) or skips it.
+    @Test func pendingVersionLifecycle() {
+        func after(_ events: [AppUpdater.UpdateEvent], from start: String? = nil) -> String? {
+            events.reduce(start) { AppUpdater.pendingVersion(after: $1, current: $0) }
+        }
+        #expect(after([.found("1.4")]) == "1.4")
+        #expect(after([.found("1.4"), .chose(.later)]) == "1.4", "Remind Me Later keeps it")
+        #expect(after([.found("1.4"), .chose(.install)]) == "1.4", "a failed install leaves it waiting")
+        #expect(after([.found("1.4"), .chose(.skip)]) == nil)
+        #expect(after([.found("1.4"), .upToDate]) == nil)
+        #expect(after([.found("1.4"), .found("1.5")]) == "1.5")
+        #expect(after([.chose(.later)]) == nil)
+        #expect(after([.found("1.4"), .chose(.skip), .found("1.5"), .chose(.later)]) == "1.5")
+    }
+
+    /// A scripted launch with `--fake-pending-update` starts with the version waiting, updater off.
+    @Test func fakePendingVersion() {
+        let updater = AppUpdater(start: false, fakePendingVersion: "1.4")
+        #expect(updater.pendingVersion == "1.4" && !updater.isRunning)
+        #expect(AppUpdater.menuTitle(pendingVersion: updater.pendingVersion) == "Install Wallflower 1.4…")
+        #expect(AppUpdater(start: false).pendingVersion == nil)
     }
 }

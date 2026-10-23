@@ -49,7 +49,7 @@ Colours depend on the Colour setting. With **Status**, amber means needs input, 
 
 ### Updates
 
-Wallflower checks for a new version once a week and shows what changed. Nothing downloads until you click **Install Update**; the new version then replaces the old one in place and relaunches. **Check for Updates…** in the menu bar menu checks right away, and **Settings > General > Check for updates automatically** turns the weekly check off. Updates come as a zip next to the disk image on each release; you never need to download it yourself. Version 0.1.0 has no updater yet: download the disk image by hand once, and every update after that arrives in the app.
+Wallflower checks for a new version once a week and shows what changed; while one is waiting, its menu bar icon is green until you install or skip it. Nothing downloads until you click **Install Update**; the new version then replaces the old one in place and relaunches. **Check for Updates…** in the menu bar menu checks right away, and **Settings > General > Check for updates automatically** turns the weekly check off. Updates come as a zip next to the disk image on each release; you never need to download it yourself. Version 0.1.0 has no updater yet: download the disk image by hand once, and every update after that arrives in the app.
 
 ### Build from source
 

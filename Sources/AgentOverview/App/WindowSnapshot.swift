@@ -279,7 +279,8 @@ enum WindowSnapshot {
 
     /// Writes the status item glyphs for review, next to `url`: each state at 1x and 2x as the template
     /// (`<name>-calm@1x.png` ...), and `<name>-sheet.png`, every rendering on a light and a dark menu bar
-    /// tint, enlarged 8 times without smoothing so each pixel shows, plus the menu's status shapes.
+    /// tint, enlarged 8 times without smoothing so each pixel shows, then each state green as while an
+    /// update waits (in that bar's `MenuBarIcon.updateInk`), plus the menu's status shapes.
     static func writeMenuBarGlyphs(to url: URL) throws -> [URL] {
         let base = url.deletingPathExtension()
         var written: [URL] = []
@@ -294,14 +295,14 @@ enum WindowSnapshot {
         }
 
         // Contact sheet: rows = light and dark bar; columns = calm 1x, calm 2x, needs you 1x, needs you 2x,
-        // then the three status shapes of the menu items at 2x.
+        // the same four green (an update waits), then the three status shapes of the menu items at 2x.
         let magnify = 8
         let cell = 18 * 2 * magnify + 16
         let shapes: [FaceStatus] = [.needsInput(kind: .question), .working, .idle(since: Date())]
-        let columns = glyphs.count * 2 + shapes.count
-        let bars: [(paper: CGColor, ink: CGColor)] = [
-            (CGColor(gray: 0.93, alpha: 1), CGColor(gray: 0, alpha: 0.85)),
-            (CGColor(gray: 0.13, alpha: 1), CGColor(gray: 1, alpha: 1)),
+        let columns = glyphs.count * 2 * 2 + shapes.count
+        let bars: [(paper: CGColor, ink: CGColor, update: CGColor)] = [
+            (CGColor(gray: 0.93, alpha: 1), CGColor(gray: 0, alpha: 0.85), MenuBarIcon.updateInk(darkBar: false)),
+            (CGColor(gray: 0.13, alpha: 1), CGColor(gray: 1, alpha: 1), MenuBarIcon.updateInk(darkBar: true)),
         ]
         guard let sheet = CGContext(
             data: nil, width: cell * columns, height: cell * bars.count, bitsPerComponent: 8, bytesPerRow: 0,
@@ -313,12 +314,14 @@ enum WindowSnapshot {
             sheet.setFillColor(bar.paper)
             sheet.fill(CGRect(x: 0, y: y, width: cell * columns, height: cell))
             var column = 0
-            for (_, glyph) in glyphs {
-                for scale in [1, 2] {
-                    let image = try glyphImage(MenuBarIcon.size, scale: CGFloat(scale), ink: bar.ink, paper: bar.paper) { MenuBarIcon.path(glyph, in: $0) }
-                    let side = image.width * magnify * (2 / scale)
-                    sheet.draw(image, in: CGRect(x: column * cell + (cell - side) / 2, y: y + (cell - side) / 2, width: side, height: side))
-                    column += 1
+            for ink in [bar.ink, bar.update] {
+                for (_, glyph) in glyphs {
+                    for scale in [1, 2] {
+                        let image = try glyphImage(MenuBarIcon.size, scale: CGFloat(scale), ink: ink, paper: bar.paper) { MenuBarIcon.path(glyph, in: $0) }
+                        let side = image.width * magnify * (2 / scale)
+                        sheet.draw(image, in: CGRect(x: column * cell + (cell - side) / 2, y: y + (cell - side) / 2, width: side, height: side))
+                        column += 1
+                    }
                 }
             }
             for status in shapes {

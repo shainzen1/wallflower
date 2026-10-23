@@ -95,6 +95,41 @@ struct ReleaseScriptTests {
         #expect(try await appcast(extra: ["--length", "0"]).status == 1)
         #expect(try await appcast(version: "0.2").status == 0)
         #expect(try await appcast(version: "v0.2.0").status == 1)
+        #expect(try await appcast(version: "1.4").status == 0)
+    }
+
+    // MARK: Version bump
+
+    /// `scripts/bump-version.sh` in a copy: two-part versions from 1.4 on, three parts still taken,
+    /// the build one higher each time.
+    @Test func bumpVersionTakesTwoParts() async throws {
+        let folder = try TestSupport.makeTempFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let script = folder.appending(path: "scripts/bump-version.sh")
+        let plist = folder.appending(path: "Packaging/Info.plist")
+        try FileManager.default.createDirectory(at: script.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: plist.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: Self.root.appending(path: "scripts/bump-version.sh"), to: script)
+        let info: [String: Any] = ["CFBundleShortVersionString": "0.1.3", "CFBundleVersion": "4"]
+        try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: plist)
+        func read() throws -> (String?, String?) {
+            let info = try PropertyListSerialization.propertyList(from: Data(contentsOf: plist), format: nil) as? [String: Any]
+            return (info?["CFBundleShortVersionString"] as? String, info?["CFBundleVersion"] as? String)
+        }
+
+        let bumped = try await run("/bin/bash", [script.path, "1.4"])
+        #expect(bumped.status == 0, "\(bumped.error)")
+        #expect(bumped.output.contains("1.4 (build 5)"))
+        #expect(try read() == ("1.4", "5"))
+        #expect(try await run("/bin/bash", [script.path, "1.10"]).status == 0)
+        #expect(try read() == ("1.10", "6"))
+        #expect(try await run("/bin/bash", [script.path, "1.10.1"]).status == 0, "three parts still work")
+        for bad in ["1", "v1.5", "1.5-beta", "1.5.0.1"] {
+            let refused = try await run("/bin/bash", [script.path, bad])
+            #expect(refused.status == 1 && refused.error.contains("like 1.4"), "\(bad)")
+        }
+        #expect(try read() == ("1.10.1", "7"), "a refused version changes nothing")
+        #expect(try await run("/bin/bash", [script.path, "--help"]).output.contains("scripts/bump-version.sh 1.4"))
     }
 
     // MARK: Placeholder key guard

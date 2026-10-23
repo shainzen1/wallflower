@@ -71,6 +71,16 @@ struct LaunchArguments {
         updates ?? (defaultsSuite == nil)
     }
 
+    /// `--fake-pending-update <version>`: start as if a check had found this version, so the green
+    /// menu bar glyph and the "Install Wallflower <version>…" item show without a feed. Only with
+    /// `--defaults-suite`: a launch on the real settings ignores it.
+    var fakePendingUpdate: String?
+
+    /// `fakePendingUpdate` where it applies (a scripted launch), else nil.
+    var pendingUpdateOverride: String? {
+        defaultsSuite == nil ? nil : fakePendingUpdate
+    }
+
     /// `--show-settings <general|appearance|agents|about>`: open the Settings window on that tab at launch.
     var showSettings: SettingsTab?
     /// `--welcome-keys <return,escape,...>`: with `--welcome`, press these keys in the welcome window one
@@ -351,6 +361,8 @@ struct LaunchArguments {
                 if let text = iterator.next() { updates = AppSettings.switchValue(text) }
             case "--check-for-updates":
                 if let text = iterator.next() { checkForUpdates = UpdateCheck(rawValue: text) }
+            case "--fake-pending-update":
+                if let text = iterator.next(), !text.isEmpty { fakePendingUpdate = text }
             case "--show-settings":
                 if let text = iterator.next() { showSettings = SettingsTab(rawValue: text) }
             case "--welcome":

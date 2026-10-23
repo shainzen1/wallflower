@@ -104,11 +104,19 @@ enum Theme {
 
     /// When the panel slides off its edge by default: while nothing runs (`PanelAutoHide`).
     static let panelAutoHide: PanelAutoHide = .empty
-    /// Length of the slide off the edge and back, along the edge normal (Core Animation, on the
-    /// window content's sublayer transform; the window itself stays where it is).
-    static let autoHideSlideDuration: TimeInterval = 0.28
-    /// The slide's curve: a strong ease-out (fast start, long soft landing), both ways.
-    static let autoHideSlideCurve: (Float, Float, Float, Float) = (0.16, 1, 0.3, 1)
+    /// Length of the slide back out from the edge, along the edge normal (Core Animation, on the
+    /// window content's sublayer transform; the window itself stays where it is). Like the Dock's
+    /// reveal, unhurried: the curve puts most of the panel on screen in the first third of it.
+    static let autoHideRevealDuration: TimeInterval = 0.5
+    /// The reveal's curve: a quartic ease-out that leaves the edge fast and spends its second half
+    /// settling softly into place, as the Dock decelerates in (the mirror of `autoHideConcealCurve`).
+    /// The travel is only the capsule's width, so a milder curve reads as linear.
+    static let autoHideRevealCurve: (Float, Float, Float, Float) = (0.25, 1, 0.5, 1)
+    /// Length of the slide off the edge, the same as the reveal.
+    static let autoHideConcealDuration: TimeInterval = 0.5
+    /// The conceal's curve: a quartic ease-in that lifts off gently and drops into the edge fast,
+    /// as the Dock accelerates away, so it never lands soft against the edge.
+    static let autoHideConcealCurve: (Float, Float, Float, Float) = (0.5, 0, 0.75, 0)
     /// Reduce Motion: the panel fades out and in over this long instead of sliding.
     static let autoHideFadeDuration: TimeInterval = 0.2
     /// How long the pointer has to rest in the edge trigger before the panel comes out. Long enough
@@ -1094,8 +1102,11 @@ enum Theme {
         EyeColor(name: "blue", red: 0.36, green: 0.68, blue: 1.00),
         EyeColor(name: "sky", red: 0.38, green: 0.86, blue: 1.00),
         EyeColor(name: "teal", red: 0.24, green: 0.90, blue: 0.78),
-        EyeColor(name: "emerald", red: 0.12, green: 0.86, blue: 0.50),
+        emeraldColor,
     ]
+    /// The palette's green, named for its second job: the menu bar glyph while an update waits
+    /// (`MenuBarIcon.updateInk`).
+    static let emeraldColor = EyeColor(name: "emerald", red: 0.12, green: 0.86, blue: 0.50)
     /// Branch line (`⎇ main`): grey, 10 pt, truncated at the tail.
     static let branchColor = Color(white: 0.6)
     static let branchFont = Font.system(size: 10)

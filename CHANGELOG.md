@@ -2,7 +2,18 @@
 
 All notable changes to Wallflower are documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions have two parts from 1.4 on (1.4, 1.5, ...); the releases before it were 0.1.0 to 0.1.3.
+
+## [1.4] - 2026-10-23
+
+### Added
+
+- When a new version is ready, the Wallflower icon in the menu bar turns green, so you see it without opening anything. It stays green until you install the update or skip that version; **Remind Me Later** keeps it green.
+
+### Changed
+
+- Auto-hide slides like the Dock: a little slower, with a clear ease, lifting off gently and dropping into the edge, then easing softly back into place. Bringing it back halfway through a hide turns it around smoothly from where it is.
+- Simpler version names: this release is 1.4, the next ones 1.5, 1.6 and so on. Updating from 0.1.3 works as before.
 
 ## [0.1.3] - 2026-10-23
 
@@ -82,6 +93,7 @@ The first public release.
 
 - The welcome's Set up page keeps the "Where do you run Claude Code?" choice and the Launch at login switch inside their card.
 
+[1.4]: https://github.com/shainzen1/wallflower/compare/v0.1.3...v1.4
 [0.1.3]: https://github.com/shainzen1/wallflower/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/shainzen1/wallflower/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/shainzen1/wallflower/compare/v0.1.0...v0.1.1

@@ -206,14 +206,38 @@ struct AutoHideTests {
         #expect(!EdgeTriggerPlacement.sharesEdge(screenFrame: main, side: .right, band: band, otherScreens: []))
     }
 
-    @Test("The trigger's dwell is short and the slide is a short ease-out; the hide waits longer than the dwell")
+    @Test("The trigger's dwell is short; the hide waits longer than the dwell; the slide is the Dock's ease-in away and ease-out back, near half a second")
     func timings() {
         #expect(Theme.autoHideDwell >= 0.1 && Theme.autoHideDwell <= 0.3)
-        #expect(Theme.autoHideSlideDuration >= 0.25 && Theme.autoHideSlideDuration <= 0.3)
         #expect(Theme.autoHideDelay > Theme.autoHideDwell && Theme.autoHideLinger > Theme.autoHideDelay)
-        // Ease-out: the curve's first control point rises faster than it advances.
-        let curve = Theme.autoHideSlideCurve
-        #expect(curve.1 > curve.0 && curve.3 >= curve.2)
+        let reveal = AutoHideSlide.toward(concealed: false)
+        let conceal = AutoHideSlide.toward(concealed: true)
+        #expect(reveal.duration == Theme.autoHideRevealDuration && conceal.duration == Theme.autoHideConcealDuration)
+        #expect(reveal.duration >= 0.3 && reveal.duration <= 0.5)
+        #expect(conceal.duration >= reveal.duration && conceal.duration <= 0.5)
+        // Ease-out back: the first control point rises faster than it advances, the landing is flat.
+        #expect(reveal.curve.1 > reveal.curve.0 && reveal.curve.3 == 1)
+        // Ease-in away: the start is flat, the second control point advances faster than it rises.
+        #expect(conceal.curve.1 == 0 && conceal.curve.2 > conceal.curve.3)
+        // One the mirror of the other, so a turn-around meets the speed it left with.
+        let mirrored = (1 - conceal.curve.2, 1 - conceal.curve.3, 1 - conceal.curve.0, 1 - conceal.curve.1)
+        #expect(abs(reveal.curve.0 - mirrored.0) < 1e-6 && abs(reveal.curve.1 - mirrored.1) < 1e-6)
+        #expect(abs(reveal.curve.2 - mirrored.2) < 1e-6 && abs(reveal.curve.3 - mirrored.3) < 1e-6)
+    }
+
+    @Test("A slide that turns another around takes the square root's share of the time for the distance left")
+    func turnAroundDuration() {
+        let slide = AutoHideSlide(duration: 0.4, curve: (0.2, 0.6, 0.6, 1))
+        #expect(slide.duration(remaining: 1) == 0.4)
+        #expect(abs(slide.duration(remaining: 0.25) - 0.2) < 1e-9)
+        #expect(abs(slide.duration(remaining: 0.04) - 0.08) < 1e-9)
+        #expect(slide.duration(remaining: 0) == 0)
+        // Out of range clamps: never longer than the full slide, never negative.
+        #expect(slide.duration(remaining: 1.5) == 0.4)
+        #expect(slide.duration(remaining: -0.2) == 0)
+        // Shorter distance, shorter slide, but a short one is slower per point than linear scaling.
+        #expect(slide.duration(remaining: 0.5) < slide.duration(remaining: 0.6))
+        #expect(slide.duration(remaining: 0.1) > 0.4 * 0.1)
     }
 
     // MARK: Setting

@@ -104,6 +104,49 @@ struct MenuStatusTests {
         #expect(image.isTemplate)
         #expect(image.size == MenuBarIcon.size)
     }
+
+    @Test func updateTintsTheGlyph() {
+        for glyph in MenuBarIcon.Glyph.allCases {
+            let image = MenuBarIcon.image(glyph, pendingUpdate: "1.4")
+            #expect(!image.isTemplate, "coloured, not tinted by the bar")
+            #expect(image.size == MenuBarIcon.size)
+            #expect(image.accessibilityDescription?.hasSuffix("update 1.4 ready to install") == true)
+        }
+        #expect(MenuBarIcon.State(glyph: .calm).accessibilityDescription == "Wallflower")
+        #expect(MenuBarIcon.State(glyph: .needsYou, pendingUpdate: "1.4").accessibilityDescription
+            == "Wallflower, a session needs you, update 1.4 ready to install")
+        #expect(MenuBarIcon.State(glyph: .calm, pendingUpdate: "1.4") != MenuBarIcon.State(glyph: .calm), "a new update redraws")
+        #expect(MenuBarIcon.updateInk(darkBar: true) == Theme.emeraldColor.cgColor)
+    }
+
+    /// The green follows the appearance the glyph is drawn in: the emerald on a dark bar, the deeper
+    /// green on a light one, from one image (the bar changes with the wallpaper, the image stays).
+    @Test @MainActor func updateGreenFollowsTheBar() throws {
+        let image = MenuBarIcon.image(.calm, pendingUpdate: "1.4")
+        func centre(in name: NSAppearance.Name) throws -> NSColor {
+            let rep = try #require(NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: 18, pixelsHigh: 18, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+            ))
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            try #require(NSAppearance(named: name)).performAsCurrentDrawingAppearance {
+                image.draw(in: CGRect(origin: .zero, size: MenuBarIcon.size))
+            }
+            NSGraphicsContext.restoreGraphicsState()
+            // Below the eyes, inside the body.
+            return try #require(rep.colorAt(x: 9, y: 13)?.usingColorSpace(.sRGB))
+        }
+        let dark = try centre(in: .vibrantDark)
+        let light = try centre(in: .vibrantLight)
+        let darkAgain = try centre(in: .darkAqua)
+        let emerald = Theme.emeraldColor
+        let deep = emerald.dimmed(MenuBarIcon.lightBarUpdateDim)
+        #expect(dark.alphaComponent > 0.99 && light.alphaComponent > 0.99)
+        #expect(abs(dark.greenComponent - emerald.green) < 0.03 && abs(dark.redComponent - emerald.red) < 0.03)
+        #expect(abs(light.greenComponent - deep.green) < 0.03 && abs(light.blueComponent - deep.blue) < 0.03)
+        #expect(abs(darkAgain.greenComponent - emerald.green) < 0.03, "not stuck on the first appearance")
+    }
 }
 
 struct ProcessAncestryTests {
