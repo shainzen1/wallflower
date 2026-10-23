@@ -4,7 +4,8 @@ import Foundation
 ///
 /// One `DispatchSource` on the folder catches files appearing and disappearing. Claude Code
 /// rewrites `<pid>.json` in place for status changes (same inode, `fs.writeFile`), which a
-/// folder descriptor never sees, so every tracked file gets its own vnode source too.
+/// folder descriptor never sees, so every tracked file gets its own vnode source too. A scan reads a
+/// new file before its source exists, so arming one scans once more: a rewrite in between is not lost.
 /// All sources fire on one private serial queue; events are debounced and then one scan runs.
 /// If the folder itself is deleted or renamed, the descriptor is reopened; while it is missing
 /// its nearest existing ancestor is watched (`~/.claude`, or `~` when that is missing too), and each
@@ -181,7 +182,11 @@ final class RegistryWatcher: @unchecked Sendable {
         guard !isStopped else { return }
         pendingScan = nil
         let pass = scan()
-        syncFileSources(with: pass.fileURLs)
+        // A file is read before its source exists, so an in-place rewrite between the two is in no
+        // event: the folder source never sees content writes. Once a new file is watched, read again.
+        if syncFileSources(with: pass.fileURLs) {
+            scheduleScan()
+        }
         armExpiry(at: pass.rescanAt)
     }
 
@@ -201,16 +206,20 @@ final class RegistryWatcher: @unchecked Sendable {
     }
 
     /// One vnode source per registry file currently on disk; sources of vanished files are dropped.
-    private func syncFileSources(with urls: [URL]) {
+    /// Returns whether a new source started watching (a file the scan read before it was watched).
+    private func syncFileSources(with urls: [URL]) -> Bool {
         let wanted = Set(urls.map(\.path))
         for path in fileSources.keys where !wanted.contains(path) {
             fileSources.removeValue(forKey: path)?.cancel()
         }
+        var added = false
         for path in wanted where fileSources[path] == nil {
             fileSources[path] = makeSource(path: path) { [weak self] flags in
                 self?.fileDidChange(path: path, flags: flags)
             }
+            if fileSources[path] != nil { added = true }
         }
+        return added
     }
 
     private func makeSource(

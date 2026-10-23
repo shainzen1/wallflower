@@ -23,6 +23,12 @@ enum Theme {
     /// Radius of the concave fillets where the capsule meets the screen edge, like the notch meets the bezel.
     /// The capsule's silhouette is this much taller at each end; the fillet area is black.
     static let edgeFilletRadius: CGFloat = 10
+    /// Body height from which the edge fillets are drawn at full `edgeFilletRadius`; a shorter body
+    /// draws them in proportion (`GooLayout.edgeFilletRadius(bodyHeight:)`). Full size on a 60 pt body,
+    /// the lone new session button's, the two fillets made the edge column a third taller than the
+    /// rounded body, and it read as a rounded square in front of a taller strip on the screen edge.
+    /// The window keeps the full fillet room above and below the body, so no slot moves.
+    static let edgeFilletFullBody: CGFloat = 120
     /// Transparent slack to the left of the capsule inside the window (room for shadows and overshoot).
     static let windowPadding: CGFloat = 8
     /// Rows the capsule keeps when the store is empty: a short black stub of one row height,
@@ -93,6 +99,34 @@ enum Theme {
     /// Absolute level of that Space. 1 is the lowest that stays visible over full-screen Spaces
     /// (measured: at 0 the panel disappears while a full-screen app is active).
     static let panelSpaceLevel: Int32 = 1
+
+    // MARK: Auto-hide (Settings > General > Hide the panel)
+
+    /// When the panel slides off its edge by default: while nothing runs (`PanelAutoHide`).
+    static let panelAutoHide: PanelAutoHide = .empty
+    /// Length of the slide off the edge and back, along the edge normal (Core Animation, on the
+    /// window content's sublayer transform; the window itself stays where it is).
+    static let autoHideSlideDuration: TimeInterval = 0.28
+    /// The slide's curve: a strong ease-out (fast start, long soft landing), both ways.
+    static let autoHideSlideCurve: (Float, Float, Float, Float) = (0.16, 1, 0.3, 1)
+    /// Reduce Motion: the panel fades out and in over this long instead of sliding.
+    static let autoHideFadeDuration: TimeInterval = 0.2
+    /// How long the pointer has to rest in the edge trigger before the panel comes out. Long enough
+    /// that a pointer crossing an edge shared with another display (inside the strip for a frame or
+    /// two) never brings it out, short enough to feel immediate at an outer edge.
+    static let autoHideDwell: TimeInterval = 0.15
+    /// After the pointer left a panel it brought out, the panel slides away this much later.
+    static let autoHideDelay: TimeInterval = 0.5
+    /// After the panel has nothing left to show (the last face left, nothing waits any more), it
+    /// stays this long before it slides away, so the last face is seen leaving.
+    static let autoHideLinger: TimeInterval = 1.5
+    /// Width of the invisible edge trigger along the panel's band at an outer screen edge, where the
+    /// pointer stops at the last column. Only there while the panel is hidden; it takes the clicks
+    /// in this strip (a click brings the panel out at once).
+    static let autoHideTriggerWidth: CGFloat = 2
+    /// The trigger's width on an edge shared with another display, where the pointer does not stop
+    /// at the edge: wide enough to rest the pointer in on purpose.
+    static let autoHideSharedEdgeTriggerWidth: CGFloat = 6
 
     // MARK: Throw a face out of the capsule (stop watching a session)
 
@@ -196,7 +230,7 @@ enum Theme {
 
     // MARK: Sessions from other tools
 
-    /// Whether sessions other tools write into the external sessions folder show (Settings > General,
+    /// Whether sessions other tools write into the external sessions folder show (Settings > Agents,
     /// "Sessions from other tools"; `docs/external-sessions.md`). Default on: the folder is empty unless a tool writes there.
     static let externalSessions = true
 
@@ -365,6 +399,15 @@ enum Theme {
     static let bulgeStatusFont = Font.system(size: 11)
     /// Idle status text is dimmed so resting rows recede.
     static let bulgeIdleStatusOpacity: Double = 0.72
+    /// An external session's tool (`Codex`), after the name on the first line: small, medium weight,
+    /// grey like the branch line, so it reads as a label and not as part of the name.
+    static let bulgeToolFont = Font.system(size: 10, weight: .medium)
+    static let bulgeToolColor = Color(white: 0.6)
+    /// Space between the name and the tool label.
+    static let bulgeToolGap: CGFloat = 6
+    /// A tool label longer than this many characters is cut with an ellipsis (a custom `tool` in a
+    /// session file can be anything); every connected agent's name fits (the longest, `OpenCode`, is 8).
+    static let bulgeToolMaxCharacters = 16
 
     // MARK: Switches
 

@@ -1,0 +1,1 @@
+{"session_id":"gem-5f2a","cwd":"/Users/demo/Developer/site","hook_event_name":"AfterTool","timestamp":"2026-10-22T09:00:20.000Z","tool_name":"write_file","tool_input":{"content":"WF-SECRET-CANARY"},"tool_response":{"llmContent":"WF-SECRET-CANARY"}}

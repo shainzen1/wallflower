@@ -4,6 +4,28 @@ All notable changes to Wallflower are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-10-23
+
+### Added
+
+- Auto-hide, like the Dock: **Settings > General > Hide the panel** chooses **Never**, **When nothing is running** (the default) or **Always**. Hidden, the column slides off the screen edge; rest the pointer on that edge, where the column was, and it slides back out, then away again once the pointer left. With nothing running the new session button alone does not keep it out. In **Always** a session that needs input still brings the column out until it is answered. With Reduce Motion it fades instead.
+- Faces for other coding agents: Codex (the CLI, Codex in the ChatGPT app and in VS Code), GitHub Copilot (the CLI and Copilot's agent in VS Code), Gemini CLI, Cursor, OpenCode, Windsurf, Devin CLI and, experimental, Goose. Connect them in the new **Settings > Agents** tab: Wallflower adds a small hook to the agent's own settings after showing every line it adds, keeps a backup, and Disconnect takes exactly that out again. Cursor and Windsurf show working and done only; questions that Codex, Gemini and Devin can't signal show as working. See [docs/agents.md](docs/agents.md).
+- Settings > Agents: Claude Code (built in), the agents found on this Mac with Connect, a Show switch, Show changes, Reveal file and Disconnect, whether Codex trusts the hook yet (with how to do it), the agents not installed, the ones that can't work and why (ChatGPT chats among them), and Disconnect all.
+- Two new pages in the welcome tour: **Pick a look** (Face and Colour, with live faces) and **Which agents do you use?** (the agents found on this Mac, none ticked until you tick them, every file change confirmed on one sheet before anything is written).
+- `wallflower-hook`, the small helper the hooks run: it keeps only the session id, the folder and the status, never prompt or reply text, prints nothing and always exits 0. It lives at `~/.local/share/wallflower/bin/` while an agent is connected.
+
+### Changed
+
+- The hover names an external session's tool in a small grey label after the session name, a connected agent by its name (`Codex` instead of `codex`), and keeps the status line to `Needs permission · 2m`. Before, the tool led the status line and a long status cut it to `Code…` or hid it.
+- **Sessions from other tools** moved from Settings > General to Settings > Agents, its only place now. The setting itself is unchanged.
+
+### Fixed
+
+- The Settings window fits a 13-inch display: it grows with each tab up to about 740 pt and a taller tab scrolls. With several agents found the Agents tab, and General with its actions, ran off the bottom of a small screen.
+- On macOS 26 the capsule's edge fillets drew as solid black blocks: a hard-edged strip on the screen edge that stood out above and below the capsule, most visibly with only the new session button. The fillets now meet the edge as thin concave points on every macOS version.
+- A short capsule (the new session button alone, or a single face) flares into the screen edge with smaller fillets, in proportion to its height, so it reads as one shape instead of a rounded square in front of a taller strip.
+- A status change written right after a session appeared (by Claude Code or by a connected agent's hook) could go unseen until the next one: the face kept showing the old status. A new session file is now read once more as soon as it is watched.
+
 ## [0.1.2] - 2026-10-22
 
 ### Added
@@ -60,6 +82,7 @@ The first public release.
 
 - The welcome's Set up page keeps the "Where do you run Claude Code?" choice and the Launch at login switch inside their card.
 
+[0.1.3]: https://github.com/shainzen1/wallflower/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/shainzen1/wallflower/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/shainzen1/wallflower/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/shainzen1/wallflower/releases/tag/v0.1.0

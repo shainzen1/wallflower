@@ -1,4 +1,5 @@
 import Foundation
+import WallflowerHookCore
 
 /// The identity of a session across scans, whatever wrote it. A Claude Code session is its process
 /// (`pid`; its session id rotates across resumes, the process does not). A session from another tool
@@ -51,8 +52,15 @@ enum SessionSourceKind: Hashable, Sendable {
 
     var isClaude: Bool { self == .claude }
 
-    /// The tool name the bulge shows before the status, nil for Claude sessions and nameless tools.
+    /// The tool name the bulge shows after the session name, nil for Claude sessions and nameless tools.
+    /// A connected agent's id reads as its name (`codex` as "Codex"); any other tool as written.
     var toolName: String? {
+        guard case .external(let tool) = self, !tool.isEmpty else { return nil }
+        return AgentTool.displayName(forTool: tool)
+    }
+
+    /// The file's `tool` exactly as written (`codex`), nil for Claude sessions and nameless tools.
+    var toolID: String? {
         guard case .external(let tool) = self, !tool.isEmpty else { return nil }
         return tool
     }

@@ -116,14 +116,35 @@ enum TestSupport {
         return url
     }
 
-    /// Polls `condition` until it holds or `timeout` passes. Only tests poll; the app never does.
+    /// Runs blocking work (a subprocess and its pipes) on a dispatch queue and awaits its result, so
+    /// the test holds no thread of the cooperative pool while it waits. swift-testing runs the tests
+    /// on that pool (as many threads as cores), and every `Task.sleep` resumes through it: the script
+    /// suites (publish.sh with its git repos, release scripts, `swift` running a script) used to block
+    /// pool threads for seconds, so the sleeps and polls of the timing tests woke late.
+    static func offThePool<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global().async { continuation.resume(with: Result { try work() }) }
+        }
+    }
+
+    /// How much longer than its `timeout` a wait may run before it gives up. The timeout says how long
+    /// the awaited thing should take; this covers a busy machine. In a full parallel `swift test` the
+    /// main actor runs the synchronous `@MainActor` tests (goo geometry, containment, path rendering)
+    /// one after the other, so a poll's wake-up and the model's own `Task.sleep` both queue behind
+    /// them: under load a single 20 ms poll was measured resuming 1.5 to 3.2 s late, past the old
+    /// "duration + 1 s" deadline, before the model's sleep had even run. A wait that holds returns as
+    /// soon as it holds, so the allowance costs a passing test nothing.
+    static let busyRunAllowance: TimeInterval = 15
+
+    /// Polls `condition` until it holds or `timeout` (plus `busyRunAllowance`) passes. Only tests
+    /// poll; the app never does.
     @MainActor
     static func waitUntil(
         timeout: TimeInterval = 2,
         pollEvery interval: Duration = .milliseconds(20),
         _ condition: @MainActor () -> Bool
     ) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
+        let deadline = Date().addingTimeInterval(timeout + busyRunAllowance)
         while Date() < deadline {
             if condition() { return true }
             try? await Task.sleep(for: interval)

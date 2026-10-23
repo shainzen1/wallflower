@@ -76,10 +76,12 @@ mv build/Wallflower.app /Applications/
 - **Drag** the capsule up or down along the edge. It remembers the spot. **Reset position** puts it back in the middle.
 - **Left or right:** **Settings > General > Panel side** docks the capsule to the left or the right screen edge. The panel moves at once and everything mirrors: the bulge opens to the right, the faces look and stretch toward the screen, and you throw a face out to the right.
 - **Throw** a face out to stop watching that session: drag it away from the screen edge (to the left, or to the right with the panel on the left edge), out of the capsule, and let go, or just fling it. It flies off and stays hidden for the life of that session, even if it later needs you. **Show hidden sessions** in the menu brings them all back.
+- **Hide the panel:** with nothing running (no session and no action faces), the column slides off the screen edge, like the Dock. Rest the pointer on that edge where the column was and it slides back out, so the plus is always one move away; it slides away again half a second after the pointer left. **Settings > General > Hide the panel** picks **Never**, **When nothing is running** (the default) or **Always**, which keeps the edge free and brings the column out only while the pointer rests there or a session needs input. With Reduce Motion it fades instead of sliding.
 - **Menu bar:** the blob icon shows a status line and your sessions (click one to open it), plus Show hidden sessions, Hide panel, Reset position, Settings… (⌘,), Check for Updates…, Show welcome… and Quit.
 - **Settings:**
-  - *General:* Launch at login. Check for updates automatically (weekly) and Check Now. Show sessions from the Claude app, from terminals and editors, or everywhere, and sessions from other tools (on or off, see below). New session button (on or off). Panel side (Left or Right) and Reset position. Your actions (add, edit, reorder, remove), where actions run (Terminal or the Claude app) and, for the Claude app, permission to send the prompt (see below).
+  - *General:* Launch at login. Check for updates automatically (weekly) and Check Now. Show sessions from the Claude app, from terminals and editors, or everywhere, and sessions from other tools (on or off, see below). New session button (on or off). Panel side (Left or Right), Reset position, and Hide the panel (Never, When nothing is running, or Always). Your actions (add, edit, reorder, remove), where actions run (Terminal or the Claude app) and, for the Claude app, permission to send the prompt (see below).
   - *Appearance:* a live preview. Face (Blob or Dot matrix), Screen filter, Colour (Status, Project, Per session), Shape, Hover (Magnify, Stretch, None). Under Advanced: Goo (Liquid or Crisp), Expand (the row or the whole column) and a face playground.
+  - *Agents:* Claude Code (built in), every other agent found on this Mac with Connect, Show, Show changes, Reveal file and Disconnect, the ones not installed and the ones that can't work (with why), and Disconnect all. See [Other agents](#other-agents).
   - *About:* version, links and the welcome tour.
 
 ## Action faces
@@ -142,9 +144,25 @@ If you'd rather have action sessions in the Claude desktop app, set **Settings >
 
 The Claude app's link for a new chat can only fill the prompt in, not send it. To send it for you, Wallflower presses Return in Claude, which needs Accessibility permission: turn on **Allow sending** in the same section and allow Wallflower in System Settings. It only ever types into the Claude app, only for a few seconds after your click, and never touches text that isn't the action's prompt. Without the permission, the prompt waits in Claude's composer and the face reminds you to press Return. Because releases aren't signed with a Developer ID yet, macOS may ask for the permission again after you update Wallflower.
 
-## Other tools
+## Other agents
 
-Wallflower is built around Claude Code, but any AI coding tool (Codex CLI, Gemini CLI, Cursor, Copilot CLI, OpenCode, your own scripts) can show up in the capsule too. The tool, or a small wrapper around it, writes one JSON file per session into `~/Library/Application Support/Wallflower/sessions/`: an id, a status (`busy`, `idle` or `waiting`), and optionally a name, a folder, a process id and what a click should open. The faces, colours, sorting and hover work as for Claude sessions, and the hover names the tool: `codex · Working · 2m`.
+Wallflower is built around Claude Code, and it can watch other coding agents too. Connect them in **Settings > Agents** (or tick them in the welcome tour): Wallflower adds a small hook to that agent's settings, shows you every line first, keeps a backup, and takes it all out again on Disconnect. The faces, colours, sorting and hover work as for Claude sessions, and the hover names the agent in a small grey label after the session name.
+
+| Agent | Working | Needs input | Needs permission | Your turn | Ended |
+|---|---|---|---|---|---|
+| Claude Code | yes | yes | yes | yes | yes |
+| Codex (CLI, the ChatGPT app, VS Code) | yes | shows as working | yes | yes | yes |
+| GitHub Copilot (CLI, VS Code) | yes | yes | yes | yes | yes |
+| Gemini CLI | yes | shows as working | yes | yes | yes |
+| Cursor | yes | no | no | yes | yes |
+| OpenCode 1.x | yes | yes | yes | yes | yes |
+| Windsurf / Devin Desktop | yes | no | no | yes | when Windsurf quits |
+| Devin CLI | yes | shows as working | yes | yes | yes |
+| Goose (experimental) | yes | no | no | yes | yes |
+
+Coming later: Amp, Kiro CLI, Aider, Antigravity CLI. Not possible: **ChatGPT chats** (ChatGPT doesn't share chat status with other apps; Codex inside the ChatGPT app works), regular Claude app chats (only Claude Code sessions report their status), Zed's and Warp's own agents, Roo Code, Cline for now, and cloud agents. Codex needs one extra step: it runs a new hook only after you trust it once (`/hooks` in Codex). [docs/agents.md](docs/agents.md) has the details per agent: what it shows, which file Wallflower touches, and the safety rules every connection follows.
+
+Any other tool, or your own script, can show up as well. The tool, or a small wrapper around it, writes one JSON file per session into `~/Library/Application Support/Wallflower/sessions/`: an id, a status (`busy`, `idle` or `waiting`), and optionally a name, a folder, a process id and what a click should open.
 
 The helper script [`scripts/wallflower-session`](scripts/wallflower-session) writes those files from a shell or a hook, with nothing to install:
 
@@ -154,7 +172,9 @@ wallflower-session status --id "codex-$$" waiting --waiting-for permission
 wallflower-session end --id "codex-$$"
 ```
 
-[docs/external-sessions.md](docs/external-sessions.md) has the file format, the lifecycle, a wrapper that gives any CLI a face, and notes on lifecycle hooks. Wallflower ships no reader for any particular tool. Turn these sessions off in **Settings > General > Sessions from other tools**.
+[docs/external-sessions.md](docs/external-sessions.md) has the file format, the lifecycle, a wrapper that gives any CLI a face, and notes on lifecycle hooks. Turn all of these sessions off in **Settings > Agents > Sessions from other tools**, or one agent's faces with its **Show** switch in Settings > Agents.
+
+Before you delete Wallflower, click **Settings > Agents > Disconnect all**: it removes every hook it added and puts each changed file back. A hook left behind only fails quietly.
 
 ## How it works
 
@@ -169,9 +189,10 @@ Wallflower reads only these local files and never writes to them:
 - `~/.claude/sessions/*.json`, the session registry.
 - The end of each shown session's transcript in `~/.claude/projects/` and its subagent files, to tell what it is doing.
 - `.git/HEAD` in the session's folder, for the branch name.
-- `~/Library/Application Support/Wallflower/sessions/*.json`, the session files other tools write (see [Other tools](#other-tools)).
+- `~/Library/Application Support/Wallflower/sessions/*.json`, the session files other tools write (see [Other agents](#other-agents)).
+- The settings files of the agents you connect (`~/.codex/hooks.json`, `~/.gemini/settings.json`, ...), and only once you open Settings > Agents or tick an agent in the welcome tour. Before that it only checks whether their folders exist.
 
-It writes only its own settings (including the list of hidden sessions) and `~/Library/Application Support/Wallflower/` (`actions.json` and the small launch scripts action faces run in Terminal). Once a week it asks GitHub whether there is a newer version: it downloads `appcast.xml`, a small file with the latest version number and its release notes, from the project's latest release, and the update itself only when you choose to install it. Like any web request, this shows GitHub your IP address and, in the user agent, the Wallflower version. It sends no system profile, no analytics and no telemetry, and nothing else leaves your Mac. Turn the check off in **Settings > General > Check for updates automatically**.
+It writes only its own settings (including the list of hidden sessions), `~/Library/Application Support/Wallflower/` (`actions.json`, the small launch scripts action faces run in Terminal, and for connected agents a backup of each file it changed and a record of what it wrote), and, when you connect an agent and agree to the change it shows, that agent's hook file and the helper at `~/.local/share/wallflower/bin/wallflower-hook`. The hook tells Wallflower only that a session is working, waiting or done, never your prompts or replies. To check whether Codex trusts its hook, Settings > Agents briefly starts Codex's own `codex app-server` when you open the tab or connect Codex; it talks to nothing but that local process. Once a week it asks GitHub whether there is a newer version: it downloads `appcast.xml`, a small file with the latest version number and its release notes, from the project's latest release, and the update itself only when you choose to install it. Like any web request, this shows GitHub your IP address and, in the user agent, the Wallflower version. It sends no system profile, no analytics and no telemetry, and nothing else leaves your Mac. Turn the check off in **Settings > General > Check for updates automatically**.
 
 ## Limitations
 
@@ -182,7 +203,7 @@ It writes only its own settings (including the list of hidden sessions) and `~/L
 
 ## Contributing
 
-Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains the architecture and the debugging flags, [docs/registry-format.md](docs/registry-format.md) describes the Claude Code files Wallflower reads, and [docs/external-sessions.md](docs/external-sessions.md) the session files other tools can write.
+Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) explains the architecture and the debugging flags, [docs/registry-format.md](docs/registry-format.md) describes the Claude Code files Wallflower reads, [docs/agents.md](docs/agents.md) how other agents are connected, and [docs/external-sessions.md](docs/external-sessions.md) the session files other tools can write.
 
 ## Support
 

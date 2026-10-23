@@ -47,7 +47,7 @@ struct ExternalSessionFormatTests {
         let inFolder = try #require(decode(#"{"id": "a", "status": "idle", "cwd": "/Users/demo/Developer/project-h"}"#))
         #expect(SessionSnapshot(external: inFolder).name == "project-h", "no name: the folder, like Claude sessions")
         let toolOnly = try #require(decode(#"{"id": "a", "status": "idle", "tool": "codex"}"#))
-        #expect(SessionSnapshot(external: toolOnly).name == "codex session")
+        #expect(SessionSnapshot(external: toolOnly).name == "Codex session")
         let blankName = try #require(decode(#"{"id": "a", "status": "idle", "name": "   ", "cwd": "/Users/demo/x"}"#))
         #expect(SessionSnapshot(external: blankName).name == "x")
 
@@ -371,10 +371,15 @@ struct ExternalSessionStoreTests {
         let rows = model.rows
         let perm = try #require(rows.first { $0.key == .external("perm") })
         let codex = try #require(rows.first { $0.key == .external("codex-1") })
-        #expect(perm.label == "Needs permission" && perm.tool == "gemini")
-        #expect(codex.label == "Working" && codex.tool == "codex", "no activity: other tools' transcripts are unknown")
-        #expect(StateDurationText.text(tool: codex.tool, label: codex.label, since: codex.stateSince, now: since.addingTimeInterval(125)) == "codex · Working · 2m")
-        #expect(StateDurationText.text(tool: perm.tool, label: perm.label, since: perm.stateSince, now: since.addingTimeInterval(3900)) == "gemini · Needs permission · 1h 5m")
+        #expect(perm.label == "Needs permission" && perm.tool == "Gemini", "a connected agent's id reads as its name")
+        #expect(codex.label == "Working" && codex.tool == "Codex", "no activity: other tools' transcripts are unknown")
+        // The tool is a label after the name; the status line is the same as a Claude session's.
+        #expect(StateDurationText.text(label: codex.label, since: codex.stateSince, now: since.addingTimeInterval(125)) == "Working · 2m")
+        #expect(StateDurationText.text(label: perm.label, since: perm.stateSince, now: since.addingTimeInterval(3900)) == "Needs permission · 1h 5m")
+        #expect(BulgeContentView.toolLabel("Codex") == "Codex")
+        #expect(BulgeContentView.toolLabel("GitHub Copilot") == "GitHub Copilot", "a custom tool up to the limit is kept whole")
+        #expect(BulgeContentView.toolLabel("my-very-long-wrapper-script") == "my-very-long-wr…")
+        #expect(BulgeContentView.toolLabel("my-very-long-wrapper-script").count == Theme.bulgeToolMaxCharacters)
         #expect(codex.projectKey == "codex-1", "the folder's last component, like Claude sessions")
         #expect(perm.projectKey == "gemini", "no folder: the tool")
         #expect(codex.seed == "external-codex-1")
@@ -384,7 +389,7 @@ struct ExternalSessionStoreTests {
         #expect(SessionRow.label(for: .working, activity: .coding, source: .external(tool: "")) == "Working")
         let claude = SessionRow(pid: 3, name: "c", status: .working, stateSince: since, hostSessionId: nil, ended: false, activity: .coding)
         #expect(claude.tool == nil)
-        #expect(StateDurationText.text(tool: claude.tool, label: claude.label, since: since, now: since.addingTimeInterval(125)) == "Working · Coding · 2m")
+        #expect(StateDurationText.text(label: claude.label, since: since, now: since.addingTimeInterval(125)) == "Working · Coding · 2m")
     }
 
     @Test func externalRowsHoverAcknowledgeAndThrowLikeAnyOther() throws {
@@ -577,24 +582,27 @@ struct ExternalSessionScriptTests {
         .appending(path: "scripts/wallflower-session")
 
     @discardableResult
-    private func run(_ arguments: [String], folder: URL, sessionID: String? = nil) throws -> Int32 {
-        let process = Process()
-        process.executableURL = Self.script
-        process.arguments = arguments
-        var environment = ["WALLFLOWER_SESSIONS_DIR": folder.path, "PATH": "/usr/bin:/bin"]
-        if let sessionID { environment["WALLFLOWER_SESSION_ID"] = sessionID }
-        process.environment = environment
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-        process.waitUntilExit()
-        return process.terminationStatus
+    /// Off the cooperative pool (`TestSupport.offThePool`): the script blocks until it exits.
+    private func run(_ arguments: [String], folder: URL, sessionID: String? = nil) async throws -> Int32 {
+        try await TestSupport.offThePool {
+            let process = Process()
+            process.executableURL = Self.script
+            process.arguments = arguments
+            var environment = ["WALLFLOWER_SESSIONS_DIR": folder.path, "PATH": "/usr/bin:/bin"]
+            if let sessionID { environment["WALLFLOWER_SESSION_ID"] = sessionID }
+            process.environment = environment
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus
+        }
     }
 
-    @Test func startStatusTouchEndRoundTrip() throws {
+    @Test func startStatusTouchEndRoundTrip() async throws {
         let folder = try TestSupport.makeTempFolder().appending(path: "sessions", directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: folder.deletingLastPathComponent()) }
         let name = "Fix \"the\" parser\tnow \\ later\nsecond line"
-        #expect(try run([
+        #expect(try await run([
             "start", "--id", "codex-1", "--tool", "codex", "--name", name, "--cwd", "/Users/demo/my project",
             "--pid", "\(TestSupport.livePid)", "--status", "busy", "--open-command", "tmux attach -t 'codex 1'",
         ], folder: folder) == 0)
@@ -604,24 +612,24 @@ struct ExternalSessionScriptTests {
         #expect(record.open == .command("tmux attach -t 'codex 1'"))
         #expect(record.startedAt != nil && record.updatedAt == record.statusUpdatedAt)
 
-        #expect(try run(["status", "--id", "codex-1", "waiting", "--waiting-for", "permission"], folder: folder) == 0)
+        #expect(try await run(["status", "--id", "codex-1", "waiting", "--waiting-for", "permission"], folder: folder) == 0)
         record = try #require(ExternalSessionScanner.scan(folder: folder).records.first)
         #expect(record.status == .waiting && record.waitingKind == .permission)
         #expect(record.name == name && record.open == .command("tmux attach -t 'codex 1'"), "status keeps the other fields")
 
-        #expect(try run(["status", "idle"], folder: folder, sessionID: "codex-1") == 0, "the id from the environment, as a hook sends it")
+        #expect(try await run(["status", "idle"], folder: folder, sessionID: "codex-1") == 0, "the id from the environment, as a hook sends it")
         record = try #require(ExternalSessionScanner.scan(folder: folder).records.first)
         #expect(record.status == .idle && record.waitingFor == nil)
-        #expect(try run(["touch", "--id", "codex-1"], folder: folder) == 0)
+        #expect(try await run(["touch", "--id", "codex-1"], folder: folder) == 0)
 
-        #expect(try run(["start", "--id", "../escape"], folder: folder) == 1, "ids are file names")
-        #expect(try run(["status", "busy"], folder: folder) == 1, "no id at all")
-        #expect(try run(["status", "--id", "missing", "busy"], folder: folder) == 1)
-        #expect(try run(["start", "--id", "x", "--open-url", "a", "--open-app", "b"], folder: folder) == 1)
+        #expect(try await run(["start", "--id", "../escape"], folder: folder) == 1, "ids are file names")
+        #expect(try await run(["status", "busy"], folder: folder) == 1, "no id at all")
+        #expect(try await run(["status", "--id", "missing", "busy"], folder: folder) == 1)
+        #expect(try await run(["start", "--id", "x", "--open-url", "a", "--open-app", "b"], folder: folder) == 1)
 
-        #expect(try run(["end", "--id", "codex-1"], folder: folder) == 0)
+        #expect(try await run(["end", "--id", "codex-1"], folder: folder) == 0)
         let left = try FileManager.default.contentsOfDirectory(atPath: folder.path)
         #expect(left.isEmpty, "no session file and no temp file left")
-        #expect(try run(["end", "--id", "codex-1"], folder: folder) == 0, "ending twice is fine")
+        #expect(try await run(["end", "--id", "codex-1"], folder: folder) == 0, "ending twice is fine")
     }
 }

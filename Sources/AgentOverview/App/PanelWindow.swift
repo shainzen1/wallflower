@@ -42,8 +42,16 @@ final class PanelWindow: NSPanel {
         didSet {
             guard isHiddenByUser != oldValue else { return }
             if isHiddenByUser { orderOut(nil) } else if covers.isEmpty { show() }
+            updateEdgeTrigger()
         }
     }
+    /// Auto-hide: the content slid off the screen edge (`setConcealed`). The window stays where it is,
+    /// ignores the pointer, and the edge trigger stands in for it.
+    private(set) var isConcealed = false
+    /// The pointer rested at the edge in the panel's band (or clicked there) while it is concealed.
+    var onEdgeReveal: (() -> Void)?
+    /// The edge trigger, created on the first conceal; ordered in only while concealed and shown.
+    private var edgeTrigger: EdgeTriggerWindow?
     private var placement: PanelPlacement
     /// The SwiftUI hosting view, anchored to the window's screen-edge side (`install`).
     private weak var hosting: NSView?
@@ -111,6 +119,8 @@ final class PanelWindow: NSPanel {
     /// The part beyond the window's inner edge is clipped by the window and never drawn.
     func install(_ hosting: NSView) {
         let container = NSView(frame: NSRect(origin: .zero, size: frame.size))
+        // Layer-backed explicitly: auto-hide slides the content with this layer's sublayer transform.
+        container.wantsLayer = true
         contentView = container
         container.addSubview(hosting)
         self.hosting = hosting
@@ -137,6 +147,99 @@ final class PanelWindow: NSPanel {
         }
         ownSpace?.add(self)
         if logsFrame { DataLog.panel.notice("shown, own Space \(self.ownSpace == nil ? 0 : 1)") }
+        updateEdgeTrigger()
+    }
+
+    // MARK: Auto-hide
+
+    /// Slides the content off the screen edge (`concealed`) or back, along the edge normal: a Core
+    /// Animation move of the content view's sublayer transform by the window's width with a strong
+    /// ease-out (`Theme.autoHideSlideDuration`, `autoHideSlideCurve`), so the capsule disappears into
+    /// the edge and the window clips it; nothing runs once it landed. The window frame never moves, so
+    /// nothing shows on a display beyond a shared edge. Reduce Motion: a fade instead. Concealed, the
+    /// window ignores the pointer and the edge trigger takes over (`EdgeTriggerWindow`).
+    func setConcealed(_ concealed: Bool, animated: Bool) {
+        guard concealed != isConcealed else { return }
+        isConcealed = concealed
+        ignoresMouseEvents = concealed
+        if let layer = contentView?.layer {
+            let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            let slide = concealed && !reduceMotion
+                ? CATransform3DMakeTranslation(side.mirror(dx: frame.width), 0, 0)
+                : CATransform3DIdentity
+            let opacity: Float = concealed && reduceMotion ? 0 : 1
+            let fromSlide = layer.presentation()?.sublayerTransform ?? layer.sublayerTransform
+            let fromOpacity = layer.presentation()?.opacity ?? layer.opacity
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.sublayerTransform = slide
+            // Through AppKit's own property, which owns the layer's opacity.
+            contentView?.alphaValue = CGFloat(opacity)
+            CATransaction.commit()
+            if animated {
+                let curve = Theme.autoHideSlideCurve
+                if !CATransform3DEqualToTransform(fromSlide, slide) {
+                    let animation = CABasicAnimation(keyPath: "sublayerTransform")
+                    animation.fromValue = NSValue(caTransform3D: fromSlide)
+                    animation.toValue = NSValue(caTransform3D: slide)
+                    animation.duration = Theme.autoHideSlideDuration
+                    animation.timingFunction = CAMediaTimingFunction(controlPoints: curve.0, curve.1, curve.2, curve.3)
+                    layer.add(animation, forKey: "autoHideSlide")
+                }
+                if fromOpacity != opacity {
+                    let animation = CABasicAnimation(keyPath: "opacity")
+                    animation.fromValue = fromOpacity
+                    animation.toValue = opacity
+                    animation.duration = Theme.autoHideFadeDuration
+                    animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    layer.add(animation, forKey: "autoHideFade")
+                }
+            }
+        }
+        if logsFrame { DataLog.panel.notice("auto-hide: \(concealed ? "concealed" : "revealed", privacy: .public), animated \(animated ? 1 : 0), frame \(Self.describe(self.frame), privacy: .public)") }
+        updateEdgeTrigger()
+    }
+
+    /// Whether the pointer is on the window (a point of slack around it).
+    var isPointerOnPanel: Bool {
+        frame.insetBy(dx: -1, dy: -1).contains(NSEvent.mouseLocation)
+    }
+
+    /// The edge trigger while it is ordered in (scripted checks click it, `--gesture-script edge`).
+    var visibleEdgeTrigger: NSWindow? {
+        edgeTrigger?.isVisible == true ? edgeTrigger : nil
+    }
+
+    /// Orders the edge trigger in (at the panel's band on its edge, wider on an edge shared with
+    /// another display) while the panel is concealed and would otherwise show, and out otherwise.
+    private func updateEdgeTrigger() {
+        let wanted = isConcealed && isVisible && !isHiddenByUser && covers.isEmpty
+        guard wanted, let screen = Self.dockScreen else {
+            if edgeTrigger?.isVisible == true {
+                edgeTrigger?.orderOut(nil)
+                if logsFrame { DataLog.panel.notice("edge trigger out") }
+            }
+            return
+        }
+        let trigger = edgeTrigger ?? EdgeTriggerWindow()
+        if edgeTrigger == nil {
+            trigger.onReveal = { [weak self] in self?.onEdgeReveal?() }
+            edgeTrigger = trigger
+        }
+        let others = NSScreen.screens.filter { $0 != screen }.map(\.frame)
+        let shared = EdgeTriggerPlacement.sharesEdge(screenFrame: screen.frame, side: side, band: frame, otherScreens: others)
+        let triggerFrame = EdgeTriggerPlacement.frame(
+            panelFrame: frame, screenFrame: screen.frame, side: side, width: EdgeTriggerPlacement.width(sharesEdge: shared)
+        )
+        let wasVisible = trigger.isVisible
+        if trigger.frame != triggerFrame { trigger.setFrame(triggerFrame, display: false) }
+        if !wasVisible {
+            trigger.orderFrontRegardless()
+            ownSpace?.add(trigger)
+        }
+        if logsFrame, !wasVisible || trigger.frame != triggerFrame {
+            DataLog.panel.notice("edge trigger \(Self.describe(triggerFrame), privacy: .public) shared edge \(shared ? 1 : 0)")
+        }
     }
 
     /// Resizes the window in one call. The screen-edge side stays glued to the screen edge and the
@@ -201,6 +304,7 @@ final class PanelWindow: NSPanel {
         } else {
             setFrame(frame, display: true)
         }
+        if isConcealed { updateEdgeTrigger() }
     }
 
     /// The primary display (the one carrying the menu bar); falls back to whatever is main.
@@ -241,6 +345,7 @@ final class PanelWindow: NSPanel {
             if !isHiddenByUser { show() }
         } else if !covers.isEmpty, !wasCovered {
             orderOut(nil)
+            updateEdgeTrigger()
         }
     }
 

@@ -188,13 +188,17 @@ struct SettingsLaunchArgumentTests {
         #expect(arguments.scriptedSettings.map(\.value) == ["status", "halftone"])
         #expect(arguments.defaultsSuite == "check")
         #expect(LaunchArguments(["app", "--welcome", "9"]).welcomePage == nil)
+        #expect(LaunchArguments(["app", "--settings-scroll", "400"]).settingsScroll == 400)
+        #expect(LaunchArguments(["app", "--settings-scroll", "far"]).settingsScroll == nil)
     }
 
     @Test func snapshotTargets() {
         #expect(LaunchArguments.SnapshotWindow("panel") == .panel)
         #expect(LaunchArguments.SnapshotWindow("settings-about") == .settings(.about))
         #expect(LaunchArguments.SnapshotWindow("welcome-4") == .welcome(page: 4))
-        #expect(LaunchArguments.SnapshotWindow("welcome-5") == nil)
+        #expect(LaunchArguments.SnapshotWindow("welcome-6") == .welcome(page: 6))
+        #expect(LaunchArguments.SnapshotWindow("welcome-7") == nil)
+        #expect(LaunchArguments.SnapshotWindow("settings-agents") == .settings(.agents))
         #expect(LaunchArguments.SnapshotWindow("menu-glyph") == .menuGlyph)
         #expect(LaunchArguments.SnapshotWindow("settings-nope") == nil)
         #expect(LaunchArguments.SnapshotWindow.settings(.general).method == .view)
@@ -277,5 +281,41 @@ struct LaunchAtLoginTests {
         #expect(!LaunchAtLogin.isRegistrable(
             bundleURL: URL(filePath: "/private/var/folders/xy/abc/T/AppTranslocation/0F3A9C1E-2B4D-4E5F-8A6B-7C8D9E0F1A2B/d/Wallflower.app")
         ), "a quarantined download run from Downloads is translocated")
+    }
+}
+
+/// The Settings window fits a 13-inch display: a tab taller than the cap scrolls instead.
+@MainActor
+struct SettingsWindowHeightTests {
+    @Test func theCapIsFixedOnALargeScreenAndShrinksOnASmallOne() {
+        let cap = SettingsWindowController.maxContentHeight
+        #expect(SettingsTabViewController.maxContentHeight(visibleScreenHeight: 1_400, chrome: 90) == cap)
+        // 1440 x 900 at default scaling, menu bar and Dock taken: still the full cap.
+        #expect(SettingsTabViewController.maxContentHeight(visibleScreenHeight: 800, chrome: 90) == cap)
+        // A shorter screen: what is left after the chrome and a margin top and bottom.
+        #expect(SettingsTabViewController.maxContentHeight(visibleScreenHeight: 600, chrome: 90) == 600 - 90 - 2 * SettingsWindowController.screenMargin)
+        #expect(SettingsTabViewController.maxContentHeight(visibleScreenHeight: 100, chrome: 90) == 200, "never collapses")
+    }
+
+    @Test func theAgentsTabWithEveryAgentFoundStaysUnderTheCap() throws {
+        let suite = "SettingsWindowHeight-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let home = FileManager.default.temporaryDirectory.appending(path: "SettingsWindowHeight-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: home) }
+        for folder in [".codex", ".gemini/tmp", ".cursor", ".copilot", ".config/opencode", ".codeium/windsurf", ".config/goose", ".config/devin", ".config/amp", ".kiro"] {
+            try FileManager.default.createDirectory(at: home.appending(path: folder), withIntermediateDirectories: true)
+        }
+        let settings = AppSettings(defaults: defaults)
+        let agents = AgentsModel(environment: .fixture(home: home), settings: settings)
+        let controller = SettingsWindowController(
+            settings: settings, launchAtLogin: LaunchAtLogin(), actions: SettingsActions(), agents: agents, tab: .agents
+        )
+        let window = try #require(controller.window)
+        defer { window.close() }
+        window.layoutIfNeeded()
+        let height = window.contentLayoutRect.height
+        #expect(height <= SettingsWindowController.maxContentHeight + 0.5)
+        #expect(height >= SettingsTabViewController.maxContentHeight(in: window) - 0.5, "taller than the cap: the window is at the cap and the tab scrolls")
     }
 }

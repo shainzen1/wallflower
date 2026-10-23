@@ -1,4 +1,5 @@
 import Foundation
+import WallflowerHookCore
 
 /// One session as a scan saw it, whatever its source: what `Session` is built from and updated with.
 /// The Claude registry's `SessionRecord` and an external `ExternalSessionRecord` both map to it, so the
@@ -43,7 +44,7 @@ struct SessionSnapshot: Sendable, Equatable {
         source = .external(tool: record.tool ?? "")
         startedAt = record.startedDate
         let cwd = record.cwd ?? ""
-        name = Self.displayName(name: record.name, cwd: cwd, fallback: record.tool.map { "\($0) session" } ?? record.id)
+        name = Self.displayName(name: record.name, cwd: cwd, fallback: record.tool.map { "\(AgentTool.displayName(forTool: $0)) session" } ?? record.id)
         self.cwd = cwd
         hostSessionId = nil
         entrypoint = ""

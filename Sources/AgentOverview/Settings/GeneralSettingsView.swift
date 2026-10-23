@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The General tab: launch at login, updates, which sessions to show, the new session button, the panel
-/// position, the action faces.
+/// The General tab: launch at login, updates, which Claude sessions to show, the new session button, the
+/// panel position and when it hides, the action faces. Sessions from other tools are on the Agents tab.
 struct GeneralSettingsView: View {
     @Bindable var settings: AppSettings
     let launchAtLogin: LaunchAtLogin
@@ -36,7 +36,6 @@ struct GeneralSettingsView: View {
                         Text(source.title).tag(source)
                     }
                 }
-                Toggle("Sessions from other tools", isOn: $settings.externalSessions)
             } footer: {
                 SettingsFootnote(settings.sessionSource == .desktop
                     ? "Clicking a face opens its chat in the Claude app."
@@ -59,8 +58,11 @@ struct GeneralSettingsView: View {
                 LabeledContent("Panel position") {
                     Button("Reset position", action: actions.resetPosition)
                 }
+                Picker("Hide the panel", selection: $settings.panelAutoHide) {
+                    ForEach(PanelAutoHide.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
             } footer: {
-                SettingsFootnote("Drag the column along the edge to move it.")
+                SettingsFootnote(["Drag the column along the edge to move it.", settings.panelAutoHide.footnote].compactMap { $0 }.joined(separator: " "))
             }
 
             ActionsSettingsSection(settings: settings, accessibility: accessibility, actions: actions, editor: actionEditor)

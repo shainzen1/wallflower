@@ -214,9 +214,12 @@ struct ExcitedTests {
         var (working, workingRoot, workingConfig) = self.tree(.working)
         let w = try layers(of: workingRoot)
         workingConfig.excitedToken += 1
+        // Bracketed by clock reads around the call, not "within 20 ms of a later read": a busy main
+        // thread can be preempted after the call for longer than any fixed tolerance.
+        let before = w.face.convertTime(CACurrentMediaTime(), from: nil)
         working.apply(workingConfig)
+        let after = w.face.convertTime(CACurrentMediaTime(), from: nil)
         let hops = try #require(w.face.animation(forKey: "oneshot.excited"))
-        let now = w.face.convertTime(CACurrentMediaTime(), from: nil)
-        #expect(abs(hops.beginTime - now) < 0.02, "right away (\(hops.beginTime - now))")
+        #expect(before <= hops.beginTime && hops.beginTime <= after, "right away (\(hops.beginTime - before) s after the call began, which took \(after - before) s)")
     }
 }

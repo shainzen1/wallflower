@@ -53,7 +53,10 @@ struct GooView: View, Animatable {
         let restState = GooState(bodyHeight: state.bodyHeight, bodyExtraWidth: 0, bulgeWidth: 0, bulgeCenterY: 0, bulgeHeight: 0)
         // Canonical (right-edge) geometry; the overlay and the capsule's place are mirrored below.
         let capsuleRect = GooLayout.capsuleRect(state: restState, height: capsuleHeight)
-        let overlay: Path
+        let edgeFillet = GooLayout.edgeFilletRadius(bodyHeight: state.bodyHeight)
+        // Separate shapes filled one by one, not united: a path boolean with a coincident edge (the
+        // flush corner square on the blob's edge) is unreliable on macOS 26 (`GooLayout.capsuleTips`).
+        var overlays: [Path]
         switch expandMode {
         case .row:
             let open = GooState(
@@ -62,31 +65,36 @@ struct GooView: View, Animatable {
                 bulgeTopFlush: state.bulgeTopFlush, bulgeBottomFlush: state.bulgeBottomFlush
             )
             // On a flush side the overlay also squares off the plain capsule's corner below it.
-            var blob = GooLayout.bulgeBlob(state: open, height: capsuleHeight)
+            overlays = [GooLayout.bulgeBlob(state: open, height: capsuleHeight)]
             let body = GooLayout.bodySpan(height: capsuleHeight, bodyHeight: state.bodyHeight)
             let flush = GooLayout.flushWeights(state: open)
             let r = Theme.capsuleCornerRadius
             if flush.top > 0.5 {
-                blob = blob.union(Path(CGRect(x: capsuleRect.minX, y: body.lowerBound, width: r, height: r)))
+                overlays.append(Path(CGRect(x: capsuleRect.minX, y: body.lowerBound, width: r, height: r)))
             }
             if flush.bottom > 0.5 {
-                blob = blob.union(Path(CGRect(x: capsuleRect.minX, y: body.upperBound - r, width: r, height: r)))
+                overlays.append(Path(CGRect(x: capsuleRect.minX, y: body.upperBound - r, width: r, height: r)))
             }
-            overlay = blob
         case .all:
             let wide = GooState(bodyHeight: state.bodyHeight, bodyExtraWidth: Theme.bulgeWidth, bulgeWidth: 0, bulgeCenterY: 0, bulgeHeight: 0)
-            overlay = CapsuleShape(cornerRadius: Theme.capsuleCornerRadius, filletRadius: Theme.edgeFilletRadius, bodyHeight: state.bodyHeight)
-                .path(in: GooLayout.capsuleRect(state: wide, height: capsuleHeight))
+            overlays = [CapsuleShape(cornerRadius: Theme.capsuleCornerRadius, filletRadius: edgeFillet, bodyHeight: state.bodyHeight)
+                .path(in: GooLayout.capsuleRect(state: wide, height: capsuleHeight))]
         }
         return ZStack(alignment: .topLeading) {
-            CapsuleShape(cornerRadius: Theme.capsuleCornerRadius, filletRadius: Theme.edgeFilletRadius, bodyHeight: state.bodyHeight, side: side)
+            CapsuleShape(cornerRadius: Theme.capsuleCornerRadius, filletRadius: edgeFillet, bodyHeight: state.bodyHeight, side: side)
                 .fill(Theme.capsuleColor)
                 .frame(width: capsuleRect.width, height: capsuleHeight)
                 .offset(x: side.mirror(capsuleRect, in: Theme.contentWidth).minX)
                 .animation(animation, value: state.bodyHeight)
-            side.mirror(overlay, in: Theme.contentWidth)
-                .fill(Theme.capsuleColor)
-                .opacity(isExpanded ? 1 : 0)
+            ZStack(alignment: .topLeading) {
+                ForEach(overlays.indices, id: \.self) { index in
+                    side.mirror(overlays[index], in: Theme.contentWidth)
+                        .fill(Theme.capsuleColor)
+                }
+            }
+            // One group, so the overlapping pieces fade as one shape.
+            .compositingGroup()
+            .opacity(isExpanded ? 1 : 0)
                 .animation(.easeInOut(duration: Theme.reduceMotionBulgeFade), value: isExpanded)
         }
         .frame(width: Theme.contentWidth, height: capsuleHeight, alignment: .topLeading)

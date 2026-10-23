@@ -9,6 +9,19 @@ struct LaunchArguments {
     var externalSessionsFolder: URL?
     /// `--external-sessions <on|off>`: show sessions from other tools or not, overriding the stored setting.
     var externalSessions: Bool?
+    /// `--tools-home <dir>`: detect and connect agents in this folder instead of the home folder (its
+    /// `.codex`, `.gemini`, ... and `Applications`), keep Wallflower's side of it (helper, backups,
+    /// manifest) inside it too, and read external sessions from its sessions folder unless
+    /// `--external-sessions-folder` says otherwise. For checks that must never touch a real setup.
+    var toolsHome: URL?
+    /// `--agent-sheet <tool>`: with the Agents tab open, start Connect for that tool (its consent sheet,
+    /// or the add-by-hand sheet), so a `settings-agents` snapshot captures it.
+    var agentSheet: String?
+    /// `--connect-agents <tool,tool,...>` and `--disconnect-agents <tool,...|all>`: right after launch,
+    /// connect or disconnect these agents as the Agents tab would (plan, backup, write), log each
+    /// result, and go on. Meant for `--tools-home` runs.
+    var connectAgents: [String] = []
+    var disconnectAgents: [String] = []
     /// `--open-first`: after the first scan, click the top row (synthetic event, falling back to the
     /// action itself), log the frontmost app before and after, then quit.
     var openFirst = false
@@ -35,6 +48,8 @@ struct LaunchArguments {
     var sessionSource: SessionSource?
     /// `--side <left|right>`: the screen edge the panel docks to, overriding the stored setting.
     var panelSide: PanelSide?
+    /// `--autohide <never|empty|always>`: when the panel slides off its edge, overriding the stored setting.
+    var panelAutoHide: PanelAutoHide?
     /// `--defaults-suite <name>`: read and write the settings in this `UserDefaults` suite instead of the
     /// standard defaults, so a scripted check starts from a known state and leaves the real settings alone.
     var defaultsSuite: String?
@@ -56,7 +71,7 @@ struct LaunchArguments {
         updates ?? (defaultsSuite == nil)
     }
 
-    /// `--show-settings <general|appearance|about>`: open the Settings window on that tab at launch.
+    /// `--show-settings <general|appearance|agents|about>`: open the Settings window on that tab at launch.
     var showSettings: SettingsTab?
     /// `--welcome-keys <return,escape,...>`: with `--welcome`, press these keys in the welcome window one
     /// after the other (key equivalents first, as AppKit dispatches them), log the page after each, then quit.
@@ -64,8 +79,12 @@ struct LaunchArguments {
     /// `--log-menu`: after the first scan, build the status menu once and log every item (title,
     /// subtitle, enabled, key equivalent), since a menu cannot be captured offscreen.
     var logMenu = false
-    /// `--settings-advanced`: the Settings window opens with the Appearance tab's Advanced section expanded.
+    /// `--settings-advanced`: the Settings window opens with the Appearance tab's Advanced section
+    /// expanded, and the Agents tab's Not possible popover open.
     var settingsAdvanced = false
+    /// `--settings-scroll <points>`: with Settings open, scroll the tab down that far (at most to its end),
+    /// so a snapshot shows the bottom of a tab taller than the window.
+    var settingsScroll: Double?
     /// `--edit-action <index|new|select:<index>>`: with the General tab open, select that action and
     /// open its editor sheet, open the sheet for a new one, or only select the row. A `settings-general`
     /// snapshot then captures the sheet when one is open.
@@ -87,7 +106,10 @@ struct LaunchArguments {
             self = .edit(index)
         }
     }
-    /// `--welcome <1-4>`: open the welcome window on that page at launch, whether or not it was completed.
+    /// `--welcome-agents <tool,...>`: tick these agents in the welcome; on the last page (`--welcome 6`)
+    /// also press Start, so the confirmation of every file change shows (for snapshots).
+    var welcomeAgents: [String] = []
+    /// `--welcome <1-6>`: open the welcome window on that page at launch, whether or not it was completed.
     var welcomePage: Int?
     /// `--no-welcome`: never show the welcome window on its own at launch (scripted runs).
     var noWelcome = false
@@ -157,7 +179,8 @@ struct LaunchArguments {
     /// presses on that session face, moves the pointer by dx, dy (points, right and down) eased in and
     /// out over ms and releases at rest; `flick:<slot>:<dx>,<dy>:<ms>` the same at constant speed,
     /// released while moving; `wait:<ms>`; `menu` logs the "Show hidden sessions" item; `unhide`
-    /// chooses it. Row clicks only log in this mode. Debug only.
+    /// chooses it; `edge` clicks the hidden panel's edge trigger (auto-hide). Row clicks only log in this
+    /// mode. Debug only.
     var gestureScript: [GestureStep] = []
 
     /// One step of `--gesture-script`.
@@ -166,6 +189,9 @@ struct LaunchArguments {
         case wait(TimeInterval)
         case menu
         case unhide
+        /// A click in the edge trigger of the hidden panel (`edge`): the path a pointer at the edge
+        /// takes when it clicks there, which brings the panel out at once.
+        case edge
 
         init?(_ text: String) {
             let parts = text.split(separator: ":").map(String.init)
@@ -180,6 +206,7 @@ struct LaunchArguments {
                 self = .wait(ms / 1000)
             case "menu": self = .menu
             case "unhide": self = .unhide
+            case "edge": self = .edge
             default: return nil
             }
         }
@@ -269,7 +296,7 @@ struct LaunchArguments {
         AppSettings.Overrides(
             sessionSource: sessionSource, faceStyle: faceStyle, faceFilter: faceFilter, colorMode: colorMode,
             blobShapeMode: blobShapeMode, hoverEffect: hoverEffect, gooRenderer: gooRenderer, expandMode: expandMode,
-            actionLauncher: actionLauncher, panelSide: panelSide, externalSessions: externalSessions
+            actionLauncher: actionLauncher, panelSide: panelSide, panelAutoHide: panelAutoHide, externalSessions: externalSessions
         )
     }
 
@@ -283,6 +310,14 @@ struct LaunchArguments {
                 if let path = iterator.next() { externalSessionsFolder = URL(filePath: path, directoryHint: .isDirectory) }
             case "--external-sessions":
                 if let text = iterator.next() { externalSessions = AppSettings.switchValue(text) }
+            case "--tools-home":
+                if let path = iterator.next() { toolsHome = URL(filePath: path, directoryHint: .isDirectory) }
+            case "--agent-sheet":
+                agentSheet = iterator.next()
+            case "--connect-agents":
+                if let text = iterator.next() { connectAgents = text.split(separator: ",").map(String.init) }
+            case "--disconnect-agents":
+                if let text = iterator.next() { disconnectAgents = text.split(separator: ",").map(String.init) }
             case "--open-first": openFirst = true
             case "--log-frame": logFrame = true
             case "--vertical-offset":
@@ -308,6 +343,8 @@ struct LaunchArguments {
                 if let text = iterator.next() { sessionSource = SessionSource(rawValue: text) }
             case "--side":
                 if let text = iterator.next() { panelSide = PanelSide(rawValue: text) }
+            case "--autohide":
+                if let text = iterator.next() { panelAutoHide = PanelAutoHide(rawValue: text) }
             case "--defaults-suite":
                 if let text = iterator.next(), !text.isEmpty { defaultsSuite = text }
             case "--updates":
@@ -319,7 +356,11 @@ struct LaunchArguments {
             case "--welcome":
                 if let text = iterator.next(), let page = Int(text), (1...WelcomeModel.pageCount).contains(page) { welcomePage = page }
             case "--no-welcome": noWelcome = true
+            case "--welcome-agents":
+                if let text = iterator.next() { welcomeAgents = text.split(separator: ",").map(String.init) }
             case "--settings-advanced": settingsAdvanced = true
+            case "--settings-scroll":
+                if let text = iterator.next(), let points = Double(text) { settingsScroll = points }
             case "--edit-action":
                 if let text = iterator.next() { editAction = SettingsActionTarget(text) }
             case "--log-menu": logMenu = true

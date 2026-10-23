@@ -4,7 +4,7 @@ Wallflower reads Claude Code's own session registry (see [registry-format.md](re
 
 This page is the contract: where the files go, what is in them, how Wallflower decides a session is alive, and a helper script so a hook or a wrapper needs no JSON of its own.
 
-> Wallflower ships no reader for any particular tool, and none of the examples below were tested against a real Codex, Gemini, Cursor or Copilot install. Where a section mentions a tool's hooks, check that tool's own documentation for what it actually offers.
+> For Codex, Copilot, Gemini CLI, Cursor, OpenCode, Windsurf, Devin CLI and Goose you don't need this page: connect them in **Settings > Agents** and Wallflower installs a hook that writes these files for you (see [agents.md](agents.md)). This page is for everything else: your own scripts, wrappers, and tools Wallflower doesn't connect.
 
 ## The folder
 
@@ -48,7 +48,7 @@ The smallest file Wallflower accepts:
 |---|---|---|---|
 | `id` | string | yes | The session's identity, stable for its whole life. It must also be the file name (`<id>.json`): letters, digits, `.`, `-` and `_`, not starting with a dot, at most 128 characters. |
 | `status` | string | yes | `busy` (working), `idle` (done, your turn) or `waiting` (it needs you). Nothing else. |
-| `tool` | string | no | A short display name, shown before the status on hover: `codex · Working · 2m`. |
+| `tool` | string | no | A short display name, shown on hover as a small grey label after the name. The ids of the agents Wallflower connects (`codex`, `copilot`, `gemini`, `cursor`, `opencode`, `windsurf`, `devin`, `goose`) show as their names (`Codex`); anything else shows as written, cut at 16 characters. |
 | `name` | string | no | What the face says on hover. Without it: the last folder of `cwd`, then `<tool> session`, then the `id`. |
 | `cwd` | string | no | The session's working directory. Its last component picks the project colour (shared with Claude sessions in the same folder), and an `open.command` runs there. |
 | `waitingFor` | string | no | While `waiting`: `question` (shows "Needs input") or `permission` (shows "Needs permission", with a faster pulse). Anything else shows "Needs you". |
@@ -60,7 +60,7 @@ The smallest file Wallflower accepts:
 
 Rules:
 
-- The file is a UTF-8 JSON object. Unknown keys are ignored, so you can keep your own data in it.
+- The file is a UTF-8 JSON object. Unknown keys are ignored, so you can keep your own data in it. (Wallflower's own hook helper keeps `eventAt` there, the time of the last event it applied.)
 - A file that is not valid JSON, has no `id` or `status`, or has an unknown `status` is skipped (and logged at debug level, see Debugging). An optional key with the wrong type is treated as absent.
 - Times are numbers of milliseconds since 1970 (`$(date +%s)000` in a shell is fine).
 - Hidden files (starting with `.`) and files not ending in `.json` are ignored, so a writer can use `.<id>.json.tmp` as its temp file.
@@ -101,9 +101,9 @@ External sessions are faces like any other:
 - The same states and motion: working (the cloud), just finished (the mint burst), your turn for 15 minutes or until you click it, idle, sleepy after half an hour, needs input (amber, the hop and the halo), and the excited hop when a resting session starts working again.
 - The same sort: needs input, working, your turn, idle, newest change first.
 - The same colours: in Project mode the hue comes from the last folder of `cwd`.
-- Hover shows the name and `tool · status · time`. A long tool name is shortened before the status or the time is.
+- Hover shows the name with the tool after it in grey, then `status · time`. A long name is shortened, never the tool label or the status.
 - What they do not have: a working substate (coding, reading, running), subagent satellites or a branch line. Wallflower reads those from Claude's transcripts and knows nothing about other tools' files.
-- "Show sessions from" (Claude app, terminals, everywhere) only filters Claude sessions. External sessions always show, unless **Settings > General > Sessions from other tools** is off.
+- "Show sessions from" (Claude app, terminals, everywhere) only filters Claude sessions. External sessions always show, unless **Sessions from other tools** is off (Settings > Agents), or the **Show** switch of a connected agent is off in Settings > Agents (it hides the files whose `tool` is that agent's id).
 - Throwing a face out hides that session until it ends, and the menu bar's Show hidden sessions brings it back.
 
 ## The helper script
@@ -153,7 +153,7 @@ codex "$@"
 
 ### Tools with lifecycle hooks
 
-Many tools can run a command on events such as "a turn finished", "a prompt was submitted" or "permission needed". Point those at the helper:
+For the agents in [agents.md](agents.md), Settings > Agents sets this up for you, with a compiled helper (`wallflower-hook`) that reads each event's JSON and needs no wrapper. For any other tool that can run a command on events such as "a turn finished", "a prompt was submitted" or "permission needed", point those at the script:
 
 | Event | Command |
 |---|---|
@@ -162,7 +162,7 @@ Many tools can run a command on events such as "a turn finished", "a prompt was 
 | It asks you a question | `wallflower-session status waiting --waiting-for question` |
 | It waits for a permission | `wallflower-session status waiting --waiting-for permission` |
 
-Run the tool through the wrapper above, so `WALLFLOWER_SESSION_ID` is set for the hooks, or pass `--id` yourself. Examples of hook mechanisms that exist at the time of writing, none of them verified here: Codex CLI's `notify` setting (a program run when a turn completes), Gemini CLI's hooks, and Claude Code style hooks (`UserPromptSubmit`, `Stop`, `Notification`) in tools that copied that design. What events a tool offers, what it passes to the command and how it is configured is up to that tool; read its documentation.
+Run the tool through the wrapper above, so `WALLFLOWER_SESSION_ID` is set for the hooks, or pass `--id` yourself. What events a tool offers, what it passes to the command and how it is configured is up to that tool; read its documentation.
 
 ### Writing the file yourself
 

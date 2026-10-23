@@ -22,6 +22,7 @@ final class AppSettings {
         var actionLauncher: Theme.ActionLauncher?
         var newSessionButton: Bool?
         var panelSide: PanelSide?
+        var panelAutoHide: PanelAutoHide?
         var externalSessions: Bool?
     }
 
@@ -38,8 +39,10 @@ final class AppSettings {
         static let actionLauncher = "actionLauncher"
         static let newSessionButton = "newSessionButton"
         static let panelSide = "panelSide"
+        static let panelAutoHide = "panelAutoHide"
         static let externalSessions = "externalSessions"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let hiddenAgentTools = "hiddenAgentTools"
 
         /// Every appearance key ("Restore defaults" clears these).
         static let appearance = [faceStyle, faceFilter, colorMode, blobShapeMode, hoverEffect, gooRenderer, expandMode]
@@ -70,6 +73,14 @@ final class AppSettings {
     /// A change moves the panel live (`AppDelegate`); not an appearance value, so "Restore defaults"
     /// in the Appearance tab leaves it alone.
     var panelSide: PanelSide { didSet { store(panelSide, Key.panelSide) } }
+    /// When the panel slides off its edge (Settings > General > Hide the panel). Default: while nothing
+    /// runs (`Theme.panelAutoHide`). Applied live by `AutoHideController`, no rebuild.
+    var panelAutoHide: PanelAutoHide { didSet { store(panelAutoHide, Key.panelAutoHide) } }
+    /// Agents whose faces are hidden (Settings > Agents, a tool's Show switch off), by tool id. Hiding
+    /// only filters the faces; the tool's hooks stay connected.
+    var hiddenAgentTools: Set<String> {
+        didSet { defaults.set(hiddenAgentTools.sorted(), forKey: Key.hiddenAgentTools) }
+    }
     /// Set when the welcome window was finished or dismissed; until then it shows at launch.
     var hasCompletedOnboarding: Bool {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
@@ -92,10 +103,12 @@ final class AppSettings {
             ?? (defaults.object(forKey: Key.newSessionButton) as? Bool)
             ?? Theme.newSessionButton
         panelSide = overrides.panelSide ?? Self.read(defaults, Key.panelSide) ?? .default
+        panelAutoHide = overrides.panelAutoHide ?? Self.read(defaults, Key.panelAutoHide) ?? .default
         externalSessions = overrides.externalSessions
             ?? (defaults.object(forKey: Key.externalSessions) as? Bool)
             ?? Theme.externalSessions
         hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
+        hiddenAgentTools = Set(defaults.stringArray(forKey: Key.hiddenAgentTools) ?? [])
     }
 
     /// Everything the panel is drawn with, as one value: a change of any of it rebuilds the panel content.
@@ -143,6 +156,7 @@ final class AppSettings {
         case Key.expandMode: return set(\.expandMode)
         case Key.actionLauncher: return set(\.actionLauncher)
         case Key.panelSide: return set(\.panelSide)
+        case Key.panelAutoHide: return set(\.panelAutoHide)
         case Key.newSessionButton:
             guard let value = Self.switchValue(name) else { return false }
             newSessionButton = value

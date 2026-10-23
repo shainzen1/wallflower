@@ -14,7 +14,9 @@ CONTENTS="$APP/Contents"
 IDENTITY="${WALLFLOWER_SIGN_IDENTITY:--}"
 
 cd "$ROOT"
+HELPER="wallflower-hook"
 swift build -c release --product "$NAME" "$@"
+swift build -c release --product "$HELPER" "$@"
 BIN_DIR="$(swift build -c release --product "$NAME" "$@" --show-bin-path)"
 
 # Sparkle (in-app updates) from SwiftPM's artifact: universal, the same version as Package.resolved.
@@ -25,8 +27,10 @@ SPARKLE="$SPARKLE_ARTIFACT/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framew
 [[ -f "$SPARKLE_ARTIFACT/LICENSE" ]] || { echo "Sparkle's LICENSE not found at $SPARKLE_ARTIFACT." >&2; exit 1; }
 
 rm -rf "$APP"
-mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$CONTENTS/Frameworks"
+mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$CONTENTS/Frameworks" "$CONTENTS/Helpers"
 cp "$BIN_DIR/$NAME" "$CONTENTS/MacOS/$NAME"
+# The hook helper agents' hooks run (docs/agents.md). The app copies it to a stable path on Connect.
+cp "$BIN_DIR/$HELPER" "$CONTENTS/Helpers/$HELPER"
 cp "$ROOT/Packaging/Info.plist" "$CONTENTS/Info.plist"
 cp "$ROOT/Packaging/AppIcon.icns" "$CONTENTS/Resources/AppIcon.icns"
 # The licenses travel with the app: ours, and Sparkle's (THIRD_PARTY_NOTICES.md).
@@ -46,10 +50,10 @@ rm -rf "$FRAMEWORK/Versions/B/XPCServices" "$FRAMEWORK/XPCServices" \
 
 # No debug map or local symbols in the shipped binary: they carry this machine's build paths.
 # Only ours: Sparkle's binaries come stripped.
-strip -S -x "$CONTENTS/MacOS/$NAME"
+strip -S -x "$CONTENTS/MacOS/$NAME" "$CONTENTS/Helpers/$HELPER"
 
 # Inside out, in Sparkle's documented order: its helpers, the framework (its seal changed with the
-# removals), the app. Never --deep. No entitlements: the app is not sandboxed, loads no foreign code
+# removals), then the hook helper and the app. Never --deep. No entitlements: the app is not sandboxed, loads no foreign code
 # and sends no Apple events.
 if [[ "$IDENTITY" == "-" ]]; then
     SIGN=(codesign --force --sign -)
@@ -61,6 +65,7 @@ trap '[[ $? -eq 0 ]] || { rm -rf "$APP"; echo "Stopped: signing failed; removed 
 "${SIGN[@]}" "$FRAMEWORK/Versions/B/Autoupdate"
 "${SIGN[@]}" "$FRAMEWORK/Versions/B/Updater.app"
 "${SIGN[@]}" "$FRAMEWORK"
+"${SIGN[@]}" "$CONTENTS/Helpers/$HELPER"
 "${SIGN[@]}" "$APP"
 if [[ "$IDENTITY" == "-" ]]; then
     echo "Bundled: $APP (ad hoc)"

@@ -10,7 +10,7 @@ import Testing
 struct WelcomeLayoutTests {
     /// The page laid out in a window of the welcome's size, and every view in it.
     private func layOut(_ source: SessionSource) -> (NSView, [NSView], WelcomeModel) {
-        let model = WelcomeModel(page: 4, sessionSource: source)
+        let model = WelcomeModel(page: WelcomeModel.pageCount, sessionSource: source)
         let hosting = NSHostingView(rootView: WelcomeView(model: model, look: .themeDefault))
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: WelcomeStyle.size), styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
         window.contentView = hosting

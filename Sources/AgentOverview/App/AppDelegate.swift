@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import WallflowerHookCore
 
 /// Owns the panel, its model, the menu bar item, the Settings and welcome windows for the life of
 /// the process, and applies settings changes live: an appearance change or the new session button
@@ -32,6 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var appliedSide = PanelSide.default
     /// Whether the current store watches the external sessions folder ("Sessions from other tools").
     private var appliedExternalSessions = Theme.externalSessions
+    /// The agents whose faces the current store leaves out (Settings > Agents).
+    private var appliedHiddenTools: Set<String> = []
     /// A settings change is waiting for the store's first scan to rebuild the panel content.
     private var installsOnFirstScan = false
     /// Live sessions from the registry.
@@ -42,6 +45,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var model: PanelModel!
     /// Sessions thrown out of the capsule (`hiddenSessionPids`).
     private(set) var hiddenSessions: HiddenSessions!
+    /// Slides the panel off its edge and back (Settings > General > Hide the panel).
+    private var autoHide: AutoHideController?
+    /// The pointer monitors while the pointer holds the auto-hidden panel out (`watchPointer`).
+    private var pointerMonitors: [Any] = []
+    /// Bumped on every `observeAutoHideInputs`, so an observation of a replaced model goes quiet.
+    private var autoHideObservation = 0
+    /// Where agents are detected and connected: the home folder, or `--tools-home`.
+    private(set) lazy var agentEnvironment: AgentEnvironment = arguments.toolsHome.map(AgentEnvironment.fixture(home:)) ?? .live
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Belt and braces next to LSUIElement in Info.plist: no Dock icon, no app menu.
@@ -57,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appliedNewSessionButton = settings.newSessionButton
         appliedSide = settings.panelSide
         appliedExternalSessions = settings.externalSessions
+        appliedHiddenTools = settings.hiddenAgentTools
         appliedLook.applyToFaceLook()
 
         let updater = AppUpdater(start: arguments.runsUpdater, relaunches: arguments.defaultsSuite == nil)
@@ -77,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             logsFrame: arguments.logFrame
         )
         self.panel = panel
+        installAutoHide(panel: panel, settings: settings)
         installPanelContent()
         panel.show()
 
@@ -120,8 +133,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if arguments.playground {
             openPlayground()
         }
+        runScriptedAgents()
         openLaunchWindows()
         runScriptedUpdateCheck()
+        refreshHookHelper()
+    }
+
+    /// After an update, the installed hook helper is replaced by this build's (only when one is
+    /// installed: a Mac that never connected an agent gets no file).
+    private func refreshHookHelper() {
+        let installer = HelperInstaller(environment: agentEnvironment, source: HelperInstaller.bundledHelper)
+        DispatchQueue.global(qos: .utility).async { installer.refreshIfInstalled() }
     }
 
     // MARK: Panel content
@@ -132,7 +154,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SessionStore(
             folder: arguments.sessionsFolder ?? SessionStore.defaultFolder,
             entrypoints: source.entrypoints,
-            externalFolder: appliedExternalSessions ? (arguments.externalSessionsFolder ?? SessionStore.defaultExternalFolder) : nil
+            externalFolder: appliedExternalSessions
+                ? (arguments.externalSessionsFolder ?? arguments.toolsHome.map { HelperLayout.sessionsFolder(home: $0) } ?? SessionStore.defaultExternalFolder)
+                : nil,
+            hiddenTools: appliedHiddenTools
         )
     }
 
@@ -179,6 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let isRebuild = self.model != nil
         self.drag = drag
         self.model = model
+        observeAutoHideInputs()
         guard isRebuild else { return }
         // The menu's glyph and hidden count read the model: track the new one.
         menuBar?.observe()
@@ -193,6 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             _ = settings.look
             _ = settings.sessionSource
             _ = settings.externalSessions
+            _ = settings.hiddenAgentTools
             _ = settings.newSessionButton
             _ = settings.panelSide
         } onChange: { [weak self] in
@@ -209,8 +236,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let newSessionButton = settings.newSessionButton
         let side = settings.panelSide
         let externalSessions = settings.externalSessions
+        let hiddenTools = settings.hiddenAgentTools
         guard look != appliedLook || source != appliedSource || newSessionButton != appliedNewSessionButton || side != appliedSide
-            || externalSessions != appliedExternalSessions else { return }
+            || externalSessions != appliedExternalSessions || hiddenTools != appliedHiddenTools else { return }
         appliedNewSessionButton = newSessionButton
         // The window moves to the other edge together with the content (`installPanelContent`), so the
         // two never disagree, even while a new store's first scan is pending.
@@ -219,9 +247,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             appliedLook = look
             look.applyToFaceLook()
         }
-        if source != appliedSource || externalSessions != appliedExternalSessions {
+        if source != appliedSource || externalSessions != appliedExternalSessions || hiddenTools != appliedHiddenTools {
             appliedSource = source
             appliedExternalSessions = externalSessions
+            appliedHiddenTools = hiddenTools
             replaceStore()
         }
         // A new store starts empty: content built now would shrink the panel to the empty stub at once
@@ -251,6 +280,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installPanelContent()
     }
 
+    // MARK: Auto-hide
+
+    /// The auto-hide controller, wired to the panel: it conceals the window's content, the panel's edge
+    /// trigger brings it out, and while the pointer holds it out a global and a local monitor report
+    /// pointer moves and button releases (no permission needed for mouse events; nothing at rest, and
+    /// none while the panel is simply shown or hidden).
+    private func installAutoHide(panel: PanelWindow, settings: AppSettings) {
+        let autoHide = AutoHideController(mode: settings.panelAutoHide)
+        autoHide.setConcealed = { [weak panel] concealed, animated in panel?.setConcealed(concealed, animated: animated) }
+        autoHide.pointerIsOnPanel = { [weak panel] in panel?.isPointerOnPanel ?? false }
+        autoHide.isButtonDown = { NSEvent.pressedMouseButtons != 0 }
+        autoHide.watchPointer = { [weak self] on in self?.watchPointer(on) }
+        if arguments.logFrame {
+            autoHide.log = { DataLog.panel.notice("\($0, privacy: .public)") }
+        }
+        panel.onEdgeReveal = { [weak autoHide] in autoHide?.edgeReached() }
+        self.autoHide = autoHide
+    }
+
+    /// Feeds the auto-hide the face counts and the needs-input state of the current model, and the
+    /// mode from the settings, now and on every change. A rebuild calls it again for the new model;
+    /// the old observation then goes quiet.
+    private func observeAutoHideInputs() {
+        guard let autoHide, let model, let settings else { return }
+        autoHideObservation += 1
+        let generation = autoHideObservation
+        let inputs = withObservationTracking {
+            let sessions = model.visibleSessions
+            return (
+                sessions: sessions.count, actions: model.actionRows.count,
+                needsInput: sessions.contains { !$0.ended && $0.state.isNeedsInput }, mode: settings.panelAutoHide
+            )
+        } onChange: { [weak self] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.autoHideObservation == generation else { return }
+                    self.observeAutoHideInputs()
+                }
+            }
+        }
+        autoHide.mode = inputs.mode
+        autoHide.update(sessions: inputs.sessions, actions: inputs.actions, needsInput: inputs.needsInput)
+    }
+
+    /// Starts or stops the pointer reports to the auto-hide while the pointer holds the panel out.
+    private func watchPointer(_ on: Bool) {
+        guard on else {
+            pointerMonitors.forEach(NSEvent.removeMonitor)
+            pointerMonitors = []
+            return
+        }
+        guard pointerMonitors.isEmpty else { return }
+        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .leftMouseUp, .rightMouseUp, .otherMouseUp]
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
+            MainActor.assumeIsolated { self?.autoHide?.pointerChanged() }
+        }) {
+            pointerMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
+            MainActor.assumeIsolated { self?.autoHide?.pointerChanged() }
+            return event
+        }) {
+            pointerMonitors.append(local)
+        }
+    }
+
     // MARK: Windows
 
     /// Opens the eye playground window (created once, reused).
@@ -264,9 +359,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Opens the Settings window (created on demand, released when closed), on `tab` if given.
     func openSettings(tab: SettingsTab? = nil) {
         if settingsWindow == nil {
+            let agents = AgentsModel(environment: agentEnvironment, settings: settings)
+            agents.showsImpossible = arguments.settingsAdvanced
             let controller = SettingsWindowController(
                 settings: settings, launchAtLogin: launchAtLogin, updater: updater, actions: settingsActions, actionStore: actionStore,
-                tab: tab ?? .general,
+                agents: agents, tab: tab ?? .general,
                 showsAdvanced: arguments.settingsAdvanced
             )
             controller.onClose = { [weak self] in
@@ -299,29 +396,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         launchAtLogin.refresh()
+        let agents = WelcomeModel.agentChoices(environment: agentEnvironment)
         let model = WelcomeModel(
             page: page, sessionSource: settings.sessionSource,
             launchAtLogin: WelcomeModel.initialLaunchAtLogin(
                 hasCompletedOnboarding: settings.hasCompletedOnboarding, isEnabled: launchAtLogin.isEnabled
-            )
+            ),
+            faceStyle: settings.faceStyle, colorMode: settings.colorMode, agentChoices: agents.choices, missingAgents: agents.missing
         ) { [weak self] source in
             self?.sessionCount(for: source) ?? 0
         }
         model.onFinish = { [weak self] outcome in self?.welcomeFinished(outcome) }
+        model.onLookChange = { [weak self] style, colorMode in
+            self?.settings.faceStyle = style
+            self?.settings.colorMode = colorMode
+        }
+        let connector = AgentConnector(environment: agentEnvironment)
+        model.agentsHome = agentEnvironment.home
+        model.planAgents = { tools in
+            tools.sorted { $0.rawValue < $1.rawValue }.map { tool in
+                do {
+                    return .plan(try connector.plan(tool))
+                } catch let manual as ManualSetup {
+                    return .manual(tool, manual.reason)
+                } catch {
+                    return .manual(tool, error.localizedDescription)
+                }
+            }
+        }
         let controller = WelcomeWindowController(model: model, look: settings.look)
         controller.onClose = { [weak self] in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.welcomeWindow = nil } }
+            // The tour points at the edge: the panel stays out while it is open.
+            self?.autoHide?.setPinned(false)
         }
+        autoHide?.setPinned(true)
         welcomeWindow = controller
         controller.show()
+        if !arguments.welcomeAgents.isEmpty {
+            arguments.welcomeAgents.compactMap(AgentTool.init(rawValue:)).forEach { model.setPicked($0, true) }
+            if model.isLastPage { model.primary() }
+        }
     }
 
     /// "Start" applies the last page's choices; any way out counts as done.
     private func welcomeFinished(_ outcome: WelcomeModel.Outcome) {
         settings.hasCompletedOnboarding = true
-        guard case .started(let source, let launchAtLogin) = outcome else { return }
+        guard case .started(let source, let launchAtLogin, let agents) = outcome else { return }
         settings.sessionSource = source
         if self.launchAtLogin.isEnabled != launchAtLogin { self.launchAtLogin.set(launchAtLogin) }
+        // The agents the person ticked and confirmed, each through the same safe path as Settings.
+        let connector = AgentConnector(environment: agentEnvironment)
+        for plan in agents {
+            do {
+                try connector.connect(plan)
+                NSLog("\(AppInfo.name): connected %@", plan.tool.rawValue)
+            } catch {
+                NSLog("\(AppInfo.name): connecting %@ failed: %@", plan.tool.rawValue, error.localizedDescription)
+            }
+        }
         welcomeWindow?.close()
     }
 
@@ -339,6 +472,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         default: break
         }
         if let tab = arguments.showSettings { openSettings(tab: tab) }
+        if let name = arguments.agentSheet, let agents = settingsWindow?.agents {
+            agents.refresh()
+            if let tool = AgentTool(rawValue: name) {
+                agents.requestConnect(tool)
+            } else if name == "disconnect-all" {
+                agents.requestDisconnectAll()
+            } else if name.hasPrefix("changes:"), let tool = AgentTool(rawValue: String(name.dropFirst("changes:".count))) {
+                agents.showChanges(tool)
+            } else if name == "codex-trust" {
+                agents.sheet = .codexTrustHelp
+            }
+        }
         if let target = arguments.editAction, let editor = settingsWindow?.actionEditor {
             switch target {
             case .new: editor.startAdding()
@@ -347,6 +492,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 editor.selection = editor.items[index].id
                 editor.reveal()
             case .edit, .select: NSLog("\(AppInfo.name): --edit-action found no such action")
+            }
+        }
+        if let points = arguments.settingsScroll, let window = settingsWindow?.window {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.5))
+                Self.scrollSettings(points, in: window)
             }
         }
         if let page = arguments.welcomePage {
@@ -403,6 +554,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             main.addItem(item)
         }
         NSApp.mainMenu = main
+    }
+
+    // MARK: `--connect-agents`, `--disconnect-agents`
+
+    /// Connects, then disconnects, the agents the launch arguments name, through the same path as
+    /// the Agents tab, and logs each result.
+    private func runScriptedAgents() {
+        guard !arguments.connectAgents.isEmpty || !arguments.disconnectAgents.isEmpty else { return }
+        let connector = AgentConnector(environment: agentEnvironment)
+        for name in arguments.connectAgents {
+            guard let tool = AgentTool(rawValue: name) else { continue }
+            do {
+                try connector.connect(tool)
+                NSLog("\(AppInfo.name): --connect-agents %@: connected", name)
+            } catch {
+                NSLog("\(AppInfo.name): --connect-agents %@: %@", name, "\(error)")
+            }
+        }
+        if arguments.disconnectAgents == ["all"] {
+            let failures = connector.disconnectAll()
+            NSLog("\(AppInfo.name): --disconnect-agents all: %d failure(s)", failures.count)
+        } else {
+            for name in arguments.disconnectAgents {
+                guard let tool = AgentTool(rawValue: name) else { continue }
+                do {
+                    try connector.disconnect(tool)
+                    NSLog("\(AppInfo.name): --disconnect-agents %@: disconnected", name)
+                } catch {
+                    NSLog("\(AppInfo.name): --disconnect-agents %@: %@", name, "\(error)")
+                }
+            }
+        }
     }
 
     // MARK: `--welcome-keys`
@@ -584,6 +767,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// `--settings-scroll`: moves the Settings tab's scroll view (the outermost one, `SettingsTabRoot`) down
+    /// by that many points, at most to the end, so a snapshot shows the bottom of a capped tab. A
+    /// programmatic scroll: synthetic wheel events never reach SwiftUI's scroll view in a scripted launch.
+    private static func scrollSettings(_ points: Double, in window: NSWindow) {
+        func firstScrollView(_ view: NSView) -> NSScrollView? {
+            (view as? NSScrollView) ?? view.subviews.lazy.compactMap(firstScrollView).first
+        }
+        guard let scrollView = window.contentView.flatMap(firstScrollView), let document = scrollView.documentView else {
+            NSLog("\(AppInfo.name): --settings-scroll found no scroll view")
+            return
+        }
+        let range = max(document.frame.height - scrollView.contentView.bounds.height, 0)
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: min(max(points, 0), range)))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        NSLog("\(AppInfo.name): Settings scrolled to %.0f of %.0f pt (content %.0f pt, window content %.0f pt)",
+              scrollView.contentView.bounds.origin.y, range, document.frame.height, scrollView.frame.height)
+    }
+
     // MARK: `--snapshot`
 
     /// Captures the snapshot target after the scripted hover settled, one frame or a burst, then quits.
@@ -659,6 +860,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case .menu:
                     let count = self.model.hiddenCount
                     NSLog("\(AppInfo.name): gesture script: menu item \"%@\" enabled %d", count > 0 ? MenuBar.hiddenItemTitle(count: count) : "(none)", count > 0 ? 1 : 0)
+                case .edge:
+                    self.clickEdgeTrigger()
                 case .unhide:
                     self.model.showHiddenSessions()
                     NSLog("\(AppInfo.name): gesture script: show hidden sessions, rows now %d", self.model.rows.count)
@@ -668,6 +871,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             NSLog("\(AppInfo.name): gesture script done")
         }
+    }
+
+    /// Clicks the middle of the hidden panel's edge trigger with a synthetic press and release posted
+    /// to the app's event queue (the path a real click there takes), and logs whether one was there.
+    private func clickEdgeTrigger() {
+        guard let trigger = panel?.visibleEdgeTrigger else {
+            NSLog("\(AppInfo.name): gesture script: no edge trigger (panel not concealed)")
+            return
+        }
+        let point = NSPoint(x: trigger.frame.width / 2, y: trigger.frame.height / 2)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let event = NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: trigger.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0
+            ) {
+                NSApp.postEvent(event, atStart: false)
+            }
+        }
+        NSLog("\(AppInfo.name): gesture script: clicked the edge trigger at %@", NSStringFromRect(trigger.frame))
     }
 
     /// One press on a session face's centre, a move by dx, dy (points, right and down) and a release.

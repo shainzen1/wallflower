@@ -21,32 +21,35 @@ struct ReleaseScriptTests {
         var error: String
     }
 
-    private func run(_ executable: String, _ arguments: [String], environment: [String: String] = [:]) throws -> Run {
-        let process = Process()
-        process.executableURL = URL(filePath: executable)
-        process.arguments = arguments
-        process.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": NSTemporaryDirectory()]
-            .merging(environment) { _, new in new }
-        let output = Pipe()
-        let error = Pipe()
-        process.standardOutput = output
-        process.standardError = error
-        try process.run()
-        let out = output.fileHandleForReading.readDataToEndOfFile()
-        let err = error.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        return Run(status: process.terminationStatus, output: String(decoding: out, as: UTF8.self), error: String(decoding: err, as: UTF8.self))
+    /// Off the cooperative pool (`TestSupport.offThePool`): the script and its pipes block until it exits.
+    private func run(_ executable: String, _ arguments: [String], environment: [String: String] = [:]) async throws -> Run {
+        try await TestSupport.offThePool {
+            let process = Process()
+            process.executableURL = URL(filePath: executable)
+            process.arguments = arguments
+            process.environment = ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": NSTemporaryDirectory()]
+                .merging(environment) { _, new in new }
+            let output = Pipe()
+            let error = Pipe()
+            process.standardOutput = output
+            process.standardError = error
+            try process.run()
+            let out = output.fileHandleForReading.readDataToEndOfFile()
+            let err = error.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return Run(status: process.terminationStatus, output: String(decoding: out, as: UTF8.self), error: String(decoding: err, as: UTF8.self))
+        }
     }
 
-    private func appcast(version: String = "0.2.0", url: String = "https://example.com/download/v0.2.0/Wallflower-0.2.0.zip", extra: [String] = []) throws -> Run {
-        try run(Self.root.appending(path: "scripts/appcast.sh").path, [
+    private func appcast(version: String = "0.2.0", url: String = "https://example.com/download/v0.2.0/Wallflower-0.2.0.zip", extra: [String] = []) async throws -> Run {
+        try await run(Self.root.appending(path: "scripts/appcast.sh").path, [
             "--version", version, "--build", "3", "--minimum-system", "26.0", "--url", url, "--length", "4242",
             "--signature", Self.signature, "--changelog", Self.changelog.path, "--date", "Mon, 02 Nov 2026 09:00:00 +0000",
         ] + extra)
     }
 
-    @Test func appcastItem() throws {
-        let result = try appcast(extra: ["--release-page", "https://example.com/releases"])
+    @Test func appcastItem() async throws {
+        let result = try await appcast(extra: ["--release-page", "https://example.com/releases"])
         #expect(result.status == 0, "\(result.error)")
         let document = try XMLDocument(xmlString: result.output)
         let items = try document.nodes(forXPath: "/rss/channel/item")
@@ -77,21 +80,21 @@ struct ReleaseScriptTests {
         #expect(!notes.contains("example.com/compare"), "no link references")
     }
 
-    @Test func unreleasedSectionWhileTheVersionHasNone() throws {
-        let result = try appcast(version: "0.3.0")
+    @Test func unreleasedSectionWhileTheVersionHasNone() async throws {
+        let result = try await appcast(version: "0.3.0")
         #expect(result.status == 0, "\(result.error)")
         #expect(result.output.contains("<li>Something not released yet.</li>"))
         #expect(result.error.contains("using [Unreleased]"))
         #expect(!result.output.contains("<sparkle:fullReleaseNotesLink>"), "only with --release-page")
     }
 
-    @Test func appcastRefusesBadInput() throws {
-        #expect(try appcast(url: "https://example.com/a\"b.zip").status == 1, "a quote in the URL")
-        #expect(try appcast(url: "file:///Users/demo/Wallflower.zip").status == 1, "not http(s)")
-        #expect(try appcast(extra: ["--signature", "abc"]).status == 1, "not a signature")
-        #expect(try appcast(extra: ["--length", "0"]).status == 1)
-        #expect(try appcast(version: "0.2").status == 0)
-        #expect(try appcast(version: "v0.2.0").status == 1)
+    @Test func appcastRefusesBadInput() async throws {
+        #expect(try await appcast(url: "https://example.com/a\"b.zip").status == 1, "a quote in the URL")
+        #expect(try await appcast(url: "file:///Users/demo/Wallflower.zip").status == 1, "not http(s)")
+        #expect(try await appcast(extra: ["--signature", "abc"]).status == 1, "not a signature")
+        #expect(try await appcast(extra: ["--length", "0"]).status == 1)
+        #expect(try await appcast(version: "0.2").status == 0)
+        #expect(try await appcast(version: "v0.2.0").status == 1)
     }
 
     // MARK: Placeholder key guard
@@ -105,27 +108,27 @@ struct ReleaseScriptTests {
         return url
     }
 
-    private func checkKey(_ key: String?) throws -> Run {
+    private func checkKey(_ key: String?) async throws -> Run {
         let url = try plist(key: key)
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-        return try run(Self.root.appending(path: "scripts/check-update-key.sh").path, [url.path])
+        return try await run(Self.root.appending(path: "scripts/check-update-key.sh").path, [url.path])
     }
 
-    @Test func keyGuard() throws {
-        let placeholder = try checkKey(AppUpdater.publicKeyPlaceholder)
+    @Test func keyGuard() async throws {
+        let placeholder = try await checkKey(AppUpdater.publicKeyPlaceholder)
         #expect(placeholder.status == 1 && placeholder.error.contains("still the placeholder"), "the script and AppUpdater agree on the placeholder")
-        #expect(try checkKey(nil).status == 1)
-        let privateKey = try checkKey(Data(count: 64).base64EncodedString())
+        #expect(try await checkKey(nil).status == 1)
+        let privateKey = try await checkKey(Data(count: 64).base64EncodedString())
         #expect(privateKey.status == 1 && privateKey.error.contains("never the private key"))
-        #expect(try checkKey("not a key").status == 1)
+        #expect(try await checkKey("not a key").status == 1)
         let key = Curve25519.Signing.PrivateKey().publicKey.rawRepresentation.base64EncodedString()
-        let good = try checkKey(key)
+        let good = try await checkKey(key)
         #expect(good.status == 0 && good.output.trimmingCharacters(in: .newlines) == key)
     }
 
-    @Test func repoPlistIsRefusedWhileItHoldsThePlaceholder() throws {
+    @Test func repoPlistIsRefusedWhileItHoldsThePlaceholder() async throws {
         let info = try #require(NSDictionary(contentsOf: Self.root.appending(path: "Packaging/Info.plist")))
-        let result = try run(Self.root.appending(path: "scripts/check-update-key.sh").path, [])
+        let result = try await run(Self.root.appending(path: "scripts/check-update-key.sh").path, [])
         if info["SUPublicEDKey"] as? String == AppUpdater.publicKeyPlaceholder {
             #expect(result.status == 1)
         } else {
@@ -135,7 +138,7 @@ struct ReleaseScriptTests {
 
     // MARK: Signature check
 
-    @Test func signatureMustMatchThePublicKey() throws {
+    @Test func signatureMustMatchThePublicKey() async throws {
         let folder = try TestSupport.makeTempFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let file = folder.appending(path: "Wallflower-0.2.0.zip")
@@ -143,13 +146,13 @@ struct ReleaseScriptTests {
         let key = Curve25519.Signing.PrivateKey()
         let signature = try key.signature(for: Data("a release".utf8)).base64EncodedString()
         let script = Self.root.appending(path: "scripts/verify-update-signature.swift").path
-        func verify(_ publicKey: Curve25519.Signing.PublicKey) throws -> Int32 {
-            try run("/usr/bin/swift", [script, publicKey.rawRepresentation.base64EncodedString(), signature, file.path]).status
+        func verify(_ publicKey: Curve25519.Signing.PublicKey) async throws -> Int32 {
+            try await run("/usr/bin/swift", [script, publicKey.rawRepresentation.base64EncodedString(), signature, file.path]).status
         }
-        #expect(try verify(key.publicKey) == 0)
-        #expect(try verify(Curve25519.Signing.PrivateKey().publicKey) == 1, "signed with another key")
+        #expect(try await verify(key.publicKey) == 0)
+        #expect(try await verify(Curve25519.Signing.PrivateKey().publicKey) == 1, "signed with another key")
         try Data("a changed release".utf8).write(to: file)
-        #expect(try verify(key.publicKey) == 1, "changed after signing")
+        #expect(try await verify(key.publicKey) == 1, "changed after signing")
     }
 
     // MARK: Signing identity
@@ -158,7 +161,7 @@ struct ReleaseScriptTests {
 
     /// `release_identity` and `signing_summary` from signing.sh, with a fake `security` first on the PATH
     /// that prints `listing` for find-identity (or fails when it is nil).
-    private func identity(listing: String?, environment: [String: String] = [:]) throws -> Run {
+    private func identity(listing: String?, environment: [String: String] = [:]) async throws -> Run {
         let folder = try TestSupport.makeTempFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let fake = folder.appending(path: "security")
@@ -166,7 +169,7 @@ struct ReleaseScriptTests {
         try Data("#!/bin/bash\n[[ \"$1\" == find-identity && \"$2 $3 $4\" == \"-v -p codesigning\" ]] || exit 2\n\(body)\n".utf8).write(to: fake)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fake.path)
         let script = Self.root.appending(path: "scripts/signing.sh").path
-        return try run("/bin/bash", ["-c", "source \"$1\"; id=\"$(release_identity)\" || exit 1; echo \"[$id]\"; signing_summary \"$id\"", "bash", script],
+        return try await run("/bin/bash", ["-c", "source \"$1\"; id=\"$(release_identity)\" || exit 1; echo \"[$id]\"; signing_summary \"$id\"", "bash", script],
                        environment: ["PATH": "\(folder.path):/usr/bin:/bin:/usr/sbin:/sbin"].merging(environment) { _, new in new })
     }
 
@@ -174,47 +177,47 @@ struct ReleaseScriptTests {
         "  \(number)) \(String(repeating: String(number), count: 40)) \"\(name)\""
     }
 
-    @Test func developerIDIsFoundInTheKeychain() throws {
+    @Test func developerIDIsFoundInTheKeychain() async throws {
         let listing = [Self.line(1, "Apple Development: Demo Person (ZYXWV98765)"), Self.line(2, Self.developerID), "     2 valid identities found"]
-        let result = try identity(listing: listing.joined(separator: "\n"))
+        let result = try await identity(listing: listing.joined(separator: "\n"))
         #expect(result.status == 0, "\(result.error)")
         #expect(result.output == "[\(Self.developerID)]\nDeveloper ID (\(Self.developerID)), notarized and stapled\n")
 
         // The same certificate in two keychains is still one identity.
-        let twice = try identity(listing: [Self.line(1, Self.developerID), Self.line(2, Self.developerID)].joined(separator: "\n"))
+        let twice = try await identity(listing: [Self.line(1, Self.developerID), Self.line(2, Self.developerID)].joined(separator: "\n"))
         #expect(twice.output.hasPrefix("[\(Self.developerID)]\n"))
     }
 
-    @Test func withoutADeveloperIDTheReleaseIsAdHoc() throws {
-        let other = try identity(listing: Self.line(1, "Apple Development: Demo Person (ZYXWV98765)") + "\n     1 valid identities found")
+    @Test func withoutADeveloperIDTheReleaseIsAdHoc() async throws {
+        let other = try await identity(listing: Self.line(1, "Apple Development: Demo Person (ZYXWV98765)") + "\n     1 valid identities found")
         #expect(other.status == 0)
         #expect(other.output == "[]\nad hoc, NOT NOTARIZED (Gatekeeper will warn on the first launch)\n")
-        #expect(try identity(listing: "     0 valid identities found").output.hasPrefix("[]\n"))
-        #expect(try identity(listing: nil).output.hasPrefix("[]\n"), "security failing (no keychain) means ad hoc")
+        #expect(try await identity(listing: "     0 valid identities found").output.hasPrefix("[]\n"))
+        #expect(try await identity(listing: nil).output.hasPrefix("[]\n"), "security failing (no keychain) means ad hoc")
     }
 
-    @Test func severalDeveloperIDsNeedAChoice() throws {
+    @Test func severalDeveloperIDsNeedAChoice() async throws {
         let second = "Developer ID Application: Demo Studio (FGHIJ67890)"
         let listing = [Self.line(1, Self.developerID), Self.line(2, second)].joined(separator: "\n")
-        let result = try identity(listing: listing)
+        let result = try await identity(listing: listing)
         #expect(result.status == 1)
         #expect(result.error.contains("WALLFLOWER_SIGN_IDENTITY") && result.error.contains(Self.developerID) && result.error.contains(second))
-        let chosen = try identity(listing: listing, environment: ["WALLFLOWER_SIGN_IDENTITY": second])
+        let chosen = try await identity(listing: listing, environment: ["WALLFLOWER_SIGN_IDENTITY": second])
         #expect(chosen.status == 0 && chosen.output.hasPrefix("[\(second)]\n"))
     }
 
-    @Test func theEnvironmentOverridesTheKeychain() throws {
+    @Test func theEnvironmentOverridesTheKeychain() async throws {
         // Named explicitly: used without asking security (release.sh checks it is valid before building).
-        let named = try identity(listing: nil, environment: ["WALLFLOWER_SIGN_IDENTITY": Self.developerID])
+        let named = try await identity(listing: nil, environment: ["WALLFLOWER_SIGN_IDENTITY": Self.developerID])
         #expect(named.output.hasPrefix("[\(Self.developerID)]\n"))
         // "-" forces ad hoc even with a Developer ID in the Keychain.
-        let adHoc = try identity(listing: Self.line(1, Self.developerID), environment: ["WALLFLOWER_SIGN_IDENTITY": "-"])
+        let adHoc = try await identity(listing: Self.line(1, Self.developerID), environment: ["WALLFLOWER_SIGN_IDENTITY": "-"])
         #expect(adHoc.output.hasPrefix("[]\nad hoc, NOT NOTARIZED"))
     }
 
     // MARK: Disk image
 
-    @Test func diskImageLayoutMatchesTheBackgroundAndTheScript() throws {
+    @Test func diskImageLayoutMatchesTheBackgroundAndTheScript() async throws {
         let folder = Self.root.appending(path: "Packaging/dmg")
         let store = try Data(contentsOf: folder.appending(path: "DS_Store"))
         func utf16(_ text: String) -> Data { Data(text.utf16.flatMap { [UInt8($0 >> 8), UInt8($0 & 0xFF)] }) }
@@ -240,18 +243,18 @@ struct ReleaseScriptTests {
         #expect(script.contains("\"$STAGE/$NAME.app\"") && script.contains("ln -s /Applications \"$STAGE/Applications\""))
     }
 
-    @Test func makeDMGRefusesBadArguments() throws {
+    @Test func makeDMGRefusesBadArguments() async throws {
         let script = Self.root.appending(path: "scripts/make-dmg.sh").path
         let folder = try TestSupport.makeTempFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let other = folder.appending(path: "Other.app")
         try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
-        #expect(try run(script, []).status == 2)
-        let wrongApp = try run(script, [other.path, folder.appending(path: "out.dmg").path])
+        #expect(try await run(script, []).status == 2)
+        let wrongApp = try await run(script, [other.path, folder.appending(path: "out.dmg").path])
         #expect(wrongApp.status == 1 && wrongApp.error.contains("is not a Wallflower.app bundle"))
         let app = folder.appending(path: "Wallflower.app")
         try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
-        let wrongOut = try run(script, [app.path, folder.appending(path: "out.zip").path])
+        let wrongOut = try await run(script, [app.path, folder.appending(path: "out.zip").path])
         #expect(wrongOut.status == 1 && wrongOut.error.contains("must end in .dmg"))
     }
 }

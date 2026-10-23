@@ -36,21 +36,22 @@ struct GooPathShape: Shape {
     /// The outline on the right edge: the capsule flush with the rect's right edge, the bulge to its left.
     func canonicalPath(in rect: CGRect) -> Path {
         let capsuleRect = GooLayout.capsuleRect(state: state, height: capsuleHeight).offsetBy(dx: rect.minX, dy: rect.minY)
+        let edgeFillet = GooLayout.edgeFilletRadius(bodyHeight: state.bodyHeight)
         // Visible bulge: the blob minus its overlap with the capsule.
         let reach = state.bulgeWidth - Theme.bulgeOverlap
         guard reach > 0.5 else {
-            return CapsuleShape(cornerRadius: Theme.capsuleCornerRadius, filletRadius: Theme.edgeFilletRadius, bodyHeight: state.bodyHeight)
+            return CapsuleShape(cornerRadius: Theme.capsuleCornerRadius, filletRadius: edgeFillet, bodyHeight: state.bodyHeight)
                 .path(in: capsuleRect)
         }
         // On a flush side the capsule's corner squares off under the blob (`GooLayout.capsuleCornerRadii`).
-        var path = GooLayout.capsuleShape(state: state, filletRadius: Theme.edgeFilletRadius).path(in: capsuleRect)
+        var path = GooLayout.capsuleShape(state: state, filletRadius: edgeFillet).path(in: capsuleRect)
 
         let body = GooLayout.bodySpan(height: capsuleHeight, bodyHeight: state.bodyHeight)
         let bodyTop = body.lowerBound + rect.minY
         let bodyBottom = body.upperBound + rect.minY
         // The corner radii `CapsuleShape` draws with.
         let corners = GooLayout.capsuleCornerRadii(state: state)
-        let limit = min((bodyBottom - bodyTop) / 2, capsuleRect.width - Theme.edgeFilletRadius)
+        let limit = min((bodyBottom - bodyTop) / 2, capsuleRect.width - edgeFillet)
         let rTop = max(min(corners.top, limit), 0)
         let rBottom = max(min(corners.bottom, limit), 0)
         let left = capsuleRect.minX

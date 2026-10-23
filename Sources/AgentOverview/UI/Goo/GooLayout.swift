@@ -103,6 +103,15 @@ enum GooLayout {
         return (Theme.capsuleCornerRadius * (1 - flush.top), Theme.capsuleCornerRadius * (1 - flush.bottom))
     }
 
+    /// The edge fillet radius drawn for a body `bodyHeight` tall: `Theme.edgeFilletRadius` once the
+    /// body is `Theme.edgeFilletFullBody` tall, in proportion below that (half size on the lone new
+    /// session button's 60 pt body). It follows the springing body, so the fillets grow and shrink with
+    /// it. Only the drawing uses it: the window and the slots keep the full `Theme.edgeFilletRadius`
+    /// above and below the body, and a smaller fillet leaves that room transparent at the screen edge.
+    static func edgeFilletRadius(bodyHeight: CGFloat) -> CGFloat {
+        Theme.edgeFilletRadius * min(max(bodyHeight / Theme.edgeFilletFullBody, 0), 1)
+    }
+
     /// The capsule outline under a state: `CapsuleShape` with the corners `capsuleCornerRadii`
     /// and edge fillets of `filletRadius`.
     static func capsuleShape(state: GooState, filletRadius: CGFloat) -> CapsuleShape {
@@ -129,42 +138,63 @@ enum GooLayout {
     /// The fillets are not blurred: under a blur as wide as the fillet, the concave corner between the
     /// body and the edge fills in, the thresholded arc ends a few points short of the screen edge and
     /// the window clips it flat. They come from `capsuleTips` instead, drawn crisp on top.
+    ///
+    /// One outline, no path boolean: the fillet-less `CapsuleShape` drawn in the capsule rect widened by
+    /// `bleed` past the screen edge is exactly the capsule plus the block (see `capsuleTips` for why the
+    /// renderer avoids `Path.union` and friends).
     static func capsuleCore(state: GooState, height: CGFloat, bleed: CGFloat) -> Path {
         let rect = capsuleRect(state: state, height: height)
-        let path = capsuleShape(state: state, filletRadius: 0).path(in: rect)
-        let body = bodySpan(height: height, bodyHeight: state.bodyHeight)
-        // A union, not a second subpath: overlapping subpaths of opposite direction would cancel out
-        // under the non-zero rule. Overlaps the shape by a point, so no seam opens at the screen edge.
-        return path.union(Path(CGRect(x: rect.maxX - 1, y: body.lowerBound, width: bleed + 1, height: body.upperBound - body.lowerBound)))
+        let wide = CGRect(x: rect.minX, y: rect.minY, width: rect.width + max(bleed, 0), height: rect.height)
+        return capsuleShape(state: state, filletRadius: 0).path(in: wide)
     }
 
-    /// `.blurThreshold` renderer, the crisp pass: the capsule's two edge fillet regions, cut from the
-    /// exact `CapsuleShape` outline, each reaching `Theme.gooTipOverlap` past the fillet into the
-    /// body (left and toward the middle), where the blurred core is solid or has the same straight
-    /// edge, so the two passes meet without a seam. The tips meet the screen edge as clean points.
-    /// Past the screen edge each piece continues `overhang` wide as its own mirror image, so the
-    /// edge-soften blur on this pass sees the same shape on both sides of the edge: it neither
-    /// lightens the edge column nor thickens the thin end of the tip.
+    /// `.blurThreshold` renderer, the crisp pass: the capsule's two edge fillet regions (the sliver
+    /// between each concave arc and the screen edge, as `CapsuleShape` draws it), each reaching
+    /// `Theme.gooTipOverlap` past the fillet into the body (left and toward the middle), where the
+    /// blurred core is solid or has the same straight edge, so the two passes meet without a seam. The
+    /// tips meet the screen edge as clean points. Past the screen edge each piece continues `overhang`
+    /// wide as its own mirror image, so the edge-soften blur on this pass sees the same shape on both
+    /// sides of the edge: it neither lightens the edge column nor thickens the thin end of the tip.
+    ///
+    /// Built outline by outline, never with a path boolean. It used to be the capsule outline united
+    /// with its own mirror image and cut to two rects with `Path.union` and `Path.intersection`. The two
+    /// outlines share the whole screen-edge line, a coincident edge, and on macOS 26 (seen on 26.6.2;
+    /// 27 is fine) the boolean result came back as the full cutting rects: each tip drew as a solid
+    /// block `reach` wide and the fillet room tall, a hard-edged black strip on the screen edge that
+    /// stood out above and below the capsule (most visibly on a short capsule).
     static func capsuleTips(state: GooState, height: CGFloat, overhang: CGFloat = 0) -> Path {
         let rect = capsuleRect(state: state, height: height)
-        let f = max(min(Theme.edgeFilletRadius, rect.width / 2), 0)
+        let f = max(min(edgeFilletRadius(bodyHeight: state.bodyHeight), rect.width / 2), 0)
         guard f > 0 else { return Path() }
-        let outline = CapsuleShape(
-            cornerRadius: Theme.capsuleCornerRadius, filletRadius: Theme.edgeFilletRadius, bodyHeight: state.bodyHeight
-        ).path(in: rect)
         let body = bodySpan(height: height, bodyHeight: state.bodyHeight)
+        let edge = rect.maxX
         let reach = f + Theme.gooTipOverlap
-        // Never past the body's middle, so the two pieces stay apart on a short body.
-        let depth = min(reach, f + (body.upperBound - body.lowerBound) / 2)
-        var shape = outline
+        // How far each piece reaches into the body: never past the body's middle, so the two pieces
+        // stay apart on a short body.
+        let overlap = max(min(Theme.gooTipOverlap, (body.upperBound - body.lowerBound) / 2), 0)
+        // The top piece (y down): along the body's top edge to the fillet, up the concave arc to the
+        // screen edge, then (past the edge) down the mirrored arc and along the mirrored top edge, and
+        // back along the bottom of the overlap band.
+        let top = body.lowerBound
+        var piece = Path()
+        piece.move(to: CGPoint(x: edge - reach, y: top))
+        piece.addLine(to: CGPoint(x: edge - f, y: top))
+        piece.addRelativeArc(center: CGPoint(x: edge - f, y: top - f), radius: f, startAngle: .degrees(90), delta: .degrees(-90))
+        let far: CGFloat
         if overhang > 0 {
-            let mirror = CGAffineTransform(translationX: rect.maxX * 2, y: 0).scaledBy(x: -1, y: 1)
-            shape = shape.union(outline.applying(mirror))
+            piece.addRelativeArc(center: CGPoint(x: edge + f, y: top - f), radius: f, startAngle: .degrees(180), delta: .degrees(-90))
+            far = edge + max(overhang + 1, f)
+            piece.addLine(to: CGPoint(x: far, y: top))
+        } else {
+            far = edge
         }
-        let top = CGRect(x: rect.maxX - reach, y: body.lowerBound - f - 1, width: reach + 1 + overhang, height: depth + 1)
-        let bottom = CGRect(x: rect.maxX - reach, y: body.upperBound + f - depth, width: reach + 1 + overhang, height: depth + 1)
-        var tips = shape.intersection(Path(top))
-        tips.addPath(shape.intersection(Path(bottom)))
+        piece.addLine(to: CGPoint(x: far, y: top + overlap))
+        piece.addLine(to: CGPoint(x: edge - reach, y: top + overlap))
+        piece.closeSubpath()
+        // The bottom piece is the top one flipped about the body's middle.
+        let flip = CGAffineTransform(translationX: 0, y: body.lowerBound + body.upperBound).scaledBy(x: 1, y: -1)
+        var tips = piece
+        tips.addPath(piece.applying(flip))
         return tips
     }
 

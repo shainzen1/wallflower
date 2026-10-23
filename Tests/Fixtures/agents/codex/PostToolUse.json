@@ -1,0 +1,1 @@
+{"session_id":"019a3c1e-codex-thread","turn_id":"turn-1","cwd":"/Users/demo/Developer/parser","hook_event_name":"PostToolUse","model":"gpt-5.5","tool_name":"shell","tool_input":{"command":["ls"]},"tool_response":"WF-SECRET-CANARY"}

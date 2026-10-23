@@ -10,9 +10,11 @@ import SwiftUI
 /// On collapse all fade out in `Theme.revealExitDuration`, before the bulge melts. The whole bulge
 /// area is the click target (opens the session). Reduce Motion changes nothing here: it is fades already.
 ///
-/// Line 1: a project dot (colour hashed from the project key) and the name. Line 2: the status,
-/// with the activity while working, and the time in state; an external session's tool leads it. Line 3, when a branch is known:
-/// `⎇ main` in grey. Three lines fit the 64 pt bulge (about 44 pt of text).
+/// Line 1: a project dot (colour hashed from the project key), the name and, for an external session,
+/// its tool as a small grey label (`parser  Codex`); the name is what truncates, never the tool. Line 2:
+/// the status, with the activity while working, and the time in state. Line 3, when a branch is known:
+/// `⎇ main` in grey. Three lines fit the 64 pt bulge (about 44 pt of text). The tool used to lead the
+/// status line, where `Codex · Needs permission · 13h 25m` overflowed the bulge and lost the tool.
 struct BulgeContentView: View {
     let row: SessionRow
     /// Texts shown (the hovered row, or every row in `.all` mode).
@@ -37,14 +39,23 @@ struct BulgeContentView: View {
                     Circle()
                         .fill(ProjectColor.color(for: row.projectKey).color)
                         .frame(width: Theme.projectDotSize, height: Theme.projectDotSize)
-                    Text(row.name)
-                        .font(Theme.bulgeNameFont)
-                        .foregroundStyle(Theme.bulgeNameColor)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.bulgeToolGap) {
+                        Text(row.name)
+                            .font(Theme.bulgeNameFont)
+                            .foregroundStyle(Theme.bulgeNameColor)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if let tool = row.tool {
+                            Text(Self.toolLabel(tool))
+                                .font(Theme.bulgeToolFont)
+                                .foregroundStyle(Theme.bulgeToolColor)
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+                    }
                 }
                 .modifier(reveal(order: 0))
-                StateDurationText(label: row.label, since: row.stateSince, ticking: ticking, tool: row.tool)
+                StateDurationText(label: row.label, since: row.stateSince, ticking: ticking)
                     .font(Theme.bulgeStatusFont)
                     .foregroundStyle(statusColor)
                     .lineLimit(1)
@@ -63,6 +74,13 @@ struct BulgeContentView: View {
         }
         .buttonStyle(RowPressStyle(reduceMotion: reduceMotion))
         .allowsHitTesting(visible)
+    }
+
+    /// The tool label after the name: the tool's display name, cut to `Theme.bulgeToolMaxCharacters`
+    /// with an ellipsis, so a long custom `tool` from a session file still leaves room for the name.
+    static func toolLabel(_ tool: String) -> String {
+        guard tool.count > Theme.bulgeToolMaxCharacters else { return tool }
+        return String(tool.prefix(Theme.bulgeToolMaxCharacters - 1)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
     /// `⎇ main`.

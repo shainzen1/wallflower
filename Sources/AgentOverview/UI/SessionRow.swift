@@ -7,7 +7,7 @@ struct SessionRow: Identifiable, Equatable, Sendable {
     let key: SessionKey
     /// The session's process: always set for Claude, optional for external sessions.
     let pid: pid_t?
-    /// Claude, or the external tool (its name leads the status line).
+    /// Claude, or the external tool (its name follows the session name in the bulge).
     let source: SessionSourceKind
     /// How a click brings an external session forward; nil for Claude sessions.
     let opener: ExternalOpener?
@@ -39,7 +39,7 @@ struct SessionRow: Identifiable, Equatable, Sendable {
 
     var id: SessionKey { key }
 
-    /// The external tool's name, which leads the status line (`codex · Working · 2m`); nil for Claude.
+    /// The external tool's name, a small label after the session name in the bulge (`parser  Codex`); nil for Claude.
     var tool: String? { source.toolName }
 
     /// Seed of the face identity: the desktop session id when there is one, else the pid; an external
@@ -72,7 +72,7 @@ struct SessionRow: Identifiable, Equatable, Sendable {
         gitBranch = session.gitBranch
         let folderKey = Self.projectKey(cwd: session.cwd)
         // An external session without a folder still gets a stable colour: its tool's, else its own.
-        projectKey = folderKey.isEmpty ? (session.source.toolName ?? session.key.description) : folderKey
+        projectKey = folderKey.isEmpty ? (session.source.toolID ?? session.key.description) : folderKey
         status = Self.faceStatus(
             state: session.state,
             isJustFinished: session.isJustFinished(at: now),

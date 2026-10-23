@@ -464,4 +464,92 @@ struct GooGeometryTests {
         }
         #expect(mismatches == 0)
     }
+
+    // MARK: Short capsule and the tips' shape
+
+    @Test("Edge fillets: full size from the full body up, in proportion below it, so a lone button's capsule flares half as much")
+    func edgeFilletScalesWithShortBodies() {
+        #expect(GooLayout.edgeFilletRadius(bodyHeight: Theme.edgeFilletFullBody) == Theme.edgeFilletRadius)
+        #expect(GooLayout.edgeFilletRadius(bodyHeight: 400) == Theme.edgeFilletRadius)
+        #expect(GooLayout.edgeFilletRadius(bodyHeight: 0) == 0)
+        let lone = Theme.capsuleBodyHeight(rows: 0, actions: 0, newSession: true)
+        #expect(abs(GooLayout.edgeFilletRadius(bodyHeight: lone) - Theme.edgeFilletRadius * lone / Theme.edgeFilletFullBody) < tolerance)
+        #expect(GooLayout.edgeFilletRadius(bodyHeight: lone) < Theme.edgeFilletRadius)
+        // A session under the button (or two rows) already gets the full fillets.
+        #expect(GooLayout.edgeFilletRadius(bodyHeight: Theme.capsuleBodyHeight(rows: 1, actions: 0, newSession: true)) == Theme.edgeFilletRadius)
+        #expect(GooLayout.edgeFilletRadius(bodyHeight: Theme.capsuleBodyHeight(rows: 2, actions: 0)) == Theme.edgeFilletRadius)
+    }
+
+    /// The tips' covered area inside the window, sampled on a 0.25 pt grid over the columns from
+    /// `reach` left of the screen edge to the edge, in the band from the window's top to `rows` below it.
+    private func tipCoverage(_ tips: Path, edge: CGFloat, reach: CGFloat, top: CGFloat, height: CGFloat) -> (covered: Int, total: Int) {
+        var covered = 0, total = 0
+        for x in stride(from: edge - reach + 0.125, to: edge, by: 0.25) {
+            for y in stride(from: top + 0.125, to: top + height, by: 0.25) {
+                total += 1
+                if tips.contains(CGPoint(x: x, y: y)) { covered += 1 }
+            }
+        }
+        return (covered, total)
+    }
+
+    @Test("Threshold renderer: the tips are concave slivers, never the solid blocks of their bounds (the macOS 26 strip)", arguments: [
+        (0, 0, true), (0, 0, false), (0, 1, false), (2, 0, true), (5, 2, true),
+    ])
+    func tipsAreSliversNotBlocks(rows: Int, actions: Int, newSession: Bool) {
+        let height = Theme.capsuleHeight(rows: rows, actions: actions, newSession: newSession)
+        let state = GooState(
+            bodyHeight: Theme.capsuleBodyHeight(rows: rows, actions: actions, newSession: newSession),
+            bodyExtraWidth: 0, bulgeWidth: 0, bulgeCenterY: 0
+        )
+        let f = GooLayout.edgeFilletRadius(bodyHeight: state.bodyHeight)
+        let edge = Theme.contentWidth
+        let reach = f + Theme.gooTipOverlap
+        let tips = GooLayout.capsuleTips(state: state, height: height, overhang: Theme.gooBleed)
+        let outline = CapsuleShape(cornerRadius: Theme.capsuleCornerRadius, filletRadius: f, bodyHeight: state.bodyHeight)
+            .path(in: GooLayout.capsuleRect(state: state, height: height))
+        let body = GooLayout.bodySpan(height: height, bodyHeight: state.bodyHeight)
+        // Above the body, the tips cover the fillet sliver only, exactly where the outline does: the
+        // part of the fillet's square outside the quarter disc, about a fifth of it. Before, on
+        // macOS 26, the whole square (and the overlap beside it) was black.
+        let fillet = tipCoverage(tips, edge: edge, reach: f, top: body.lowerBound - f, height: f)
+        let expected = tipCoverage(outline, edge: edge, reach: f, top: body.lowerBound - f, height: f)
+        let share = Double(fillet.covered) / Double(fillet.total)
+        #expect(abs(fillet.covered - expected.covered) <= fillet.total / 100, "tips \(fillet.covered), outline \(expected.covered)")
+        #expect(share > 0.15 && share < 0.35, "covered \(share) of the fillet square")
+        // Nothing of the tip pokes above the fillet room, and the room's inner corner stays clear.
+        #expect(!tips.contains(CGPoint(x: edge - reach + 0.5, y: body.lowerBound - 0.5)))
+        #expect(!tips.contains(CGPoint(x: edge - 0.5, y: body.lowerBound - f - 0.5)))
+        #expect(!tips.contains(CGPoint(x: edge - reach + 0.5, y: body.upperBound + 0.5)))
+        // Inside the window the tips stay within the capsule outline, and they reach the edge at the
+        // fillet's thin end, top and bottom.
+        for x in stride(from: edge - reach + 0.13, to: edge, by: 0.5) {
+            for y in stride(from: 0.17, to: height, by: 0.5) where tips.contains(CGPoint(x: x, y: y)) {
+                let near = [CGPoint(x: -0.4, y: 0), CGPoint(x: 0.4, y: 0), CGPoint(x: 0, y: -0.4), CGPoint(x: 0, y: 0.4)]
+                    .contains { outline.contains(CGPoint(x: x + $0.x, y: y + $0.y)) }
+                #expect(near, "tip outside the outline at \(x), \(y)")
+            }
+        }
+        #expect(tips.contains(CGPoint(x: edge - 0.1, y: body.lowerBound - f * 0.4)))
+        #expect(tips.contains(CGPoint(x: edge - 0.1, y: body.upperBound + f * 0.4)))
+        // Past the edge: the mirror image, never a block.
+        #expect(tips.contains(CGPoint(x: edge + 0.1, y: body.lowerBound - f * 0.4)))
+        #expect(!tips.contains(CGPoint(x: edge + f - 0.5, y: body.lowerBound - f + 0.5)))
+    }
+
+    @Test("Threshold renderer: the blurred core is one outline, the capsule plus the block past the edge, on a short capsule too")
+    func coreOnShortCapsule() {
+        let height = Theme.capsuleHeight(rows: 0, actions: 0, newSession: true)
+        let state = GooState(bodyHeight: Theme.capsuleBodyHeight(rows: 0, actions: 0, newSession: true), bodyExtraWidth: 0, bulgeWidth: 0, bulgeCenterY: 0)
+        let body = GooLayout.bodySpan(height: height, bodyHeight: state.bodyHeight)
+        let core = GooLayout.capsuleCore(state: state, height: height, bleed: Theme.gooBleed)
+        let edge = Theme.contentWidth
+        #expect(core.contains(CGPoint(x: edge + Theme.gooBleed - 0.5, y: body.lowerBound + 0.5)))
+        #expect(core.contains(CGPoint(x: edge, y: (body.lowerBound + body.upperBound) / 2)))
+        #expect(!core.contains(CGPoint(x: edge - 0.5, y: body.lowerBound - 0.5)), "no fillet room in the core")
+        #expect(!core.contains(CGPoint(x: edge + 1, y: body.upperBound + 0.5)))
+        // The rounded corners away from the edge are the capsule's.
+        #expect(!core.contains(CGPoint(x: GooLayout.capsuleLeft + 1, y: body.lowerBound + 1)))
+        #expect(core.contains(CGPoint(x: GooLayout.capsuleLeft + 1, y: (body.lowerBound + body.upperBound) / 2)))
+    }
 }

@@ -363,9 +363,10 @@ final class BlobLayerTree {
     }
 
     /// Starts the your-turn swap (body paths and the halo's) and hop (scaler, and the halo's swell and
-    /// lift), `extraDelay` plus a seeded fraction of a period from now, all on the same clock. Nothing
+    /// lift), `extraDelay` plus a seeded fraction of a period after `now`, all on that one clock read
+    /// (building the paths between reads shifted the hop off the swap on a busy main thread). Nothing
     /// under Reduce Motion or while the hover paused it.
-    private func installSwap(_ program: BlobProgram, size: CGFloat, extraDelay: TimeInterval) {
+    private func installSwap(_ program: BlobProgram, size: CGFloat, extraDelay: TimeInterval, now: CFTimeInterval = CACurrentMediaTime()) {
         guard let swap = program.swap, !reduceMotion, !swapPaused else { return }
         let delay = extraDelay + (applied?.identity.swapPhase ?? 0) * swap.period
         if let alternate = swap.alternate {
@@ -374,20 +375,20 @@ final class BlobLayerTree {
             let first = program.body.profile.path(size: size)
             let second = alternate.profile.path(size: size)
             for layer in bodyLayers {
-                let begin = layer.convertTime(CACurrentMediaTime(), from: nil) + delay
+                let begin = layer.convertTime(now, from: nil) + delay
                 layer.add(BlobAnimations.shapeSwap(first: first, second: second, swap: swap, begin: begin), forKey: "loop.swap")
             }
             if program.halo != nil {
-                let begin = halo.convertTime(CACurrentMediaTime(), from: nil) + delay
+                let begin = halo.convertTime(now, from: nil) + delay
                 let first = haloPath(program.body, restScale: program.restScale, size: size)
                 let second = haloPath(alternate, restScale: program.restScale, size: size)
                 halo.add(BlobAnimations.shapeSwap(keyPath: Self.haloPathKey, first: first, second: second, swap: swap, begin: begin), forKey: "loop.swap")
             }
         }
-        let begin = scaler.convertTime(CACurrentMediaTime(), from: nil) + delay
+        let begin = scaler.convertTime(now, from: nil) + delay
         scaler.add(BlobAnimations.swapBounce(swap, size: size, begin: begin), forKey: "loop.bounce")
         if program.halo != nil {
-            let haloBegin = halo.convertTime(CACurrentMediaTime(), from: nil) + delay
+            let haloBegin = halo.convertTime(now, from: nil) + delay
             halo.add(BlobAnimations.haloSwell(swap, begin: haloBegin), forKey: "loop.haloSwell")
             // The glow rises and lands with the body: the hop's lift on the host (the swell stays on the
             // glow itself, so it still scales about the face centre), the squash only on the body.
@@ -636,7 +637,7 @@ final class BlobLayerTree {
         guard !reduceMotion else { return }
         let now = CACurrentMediaTime()
         let wait = max(0, (transitionEnd ?? now) - now)
-        installLoops(program, size: size, extraDelay: wait + Theme.excitedDuration)
+        installLoops(program, size: size, extraDelay: wait + Theme.excitedDuration, now: now)
         let track = BlobProgramBuilder.excitedTrack(from: program.pose, delay: wait)
         for (eye, mirrored) in [(eyeLeft, false), (eyeRight, true)] {
             // Mid-blink the track starts on the new pose as the lids open; otherwise on what is on screen.
@@ -679,11 +680,11 @@ final class BlobLayerTree {
             return
         }
         let blink = BlobTrack.blinkSwap(key: "oneshot.transition", from: old.pose, to: new.pose)
-        transitionEnd = CACurrentMediaTime() + blink.duration
+        let now = CACurrentMediaTime()
+        transitionEnd = now + blink.duration
         for (eye, mirrored) in [(eyeLeft, false), (eyeRight, true)] {
-            let now = eye.convertTime(CACurrentMediaTime(), from: nil)
             let current = (eye.presentation() ?? eye).path
-            let animation = BlobAnimations.keyframes(for: blink, now: now, firstValue: current) { pose in
+            let animation = BlobAnimations.keyframes(for: blink, now: eye.convertTime(now, from: nil), firstValue: current) { pose in
                 BlobEyes.path(for: pose, body: new.body, faceSize: size, mirrored: mirrored)
             }
             eye.add(animation, forKey: blink.key)
@@ -692,16 +693,15 @@ final class BlobLayerTree {
         if old.body != new.body || swapPath != nil {
             let to = bodyPath(new.body, size: size)
             for layer in bodyLayers {
-                let now = layer.convertTime(CACurrentMediaTime(), from: nil)
                 let from = swapPath ?? (layer.presentation() ?? layer).path
-                layer.add(BlobAnimations.morph(from: from, to: to, delay: Theme.blobBlinkClose, duration: Theme.blobMorphDuration, now: now, keep: false), forKey: "morph")
+                layer.add(BlobAnimations.morph(from: from, to: to, delay: Theme.blobBlinkClose, duration: Theme.blobMorphDuration, now: layer.convertTime(now, from: nil), keep: false), forKey: "morph")
                 layer.path = to
             }
         }
         if old.color != new.color || new.flashColor != nil {
             animateColor(to: new.color, flash: new.flashColor)
         }
-        installLoops(new, size: size, extraDelay: blink.duration)
+        installLoops(new, size: size, extraDelay: blink.duration, now: now)
         if new.bounce {
             scaler.add(BlobAnimations.bounce(), forKey: "bounce")
         }
@@ -857,22 +857,25 @@ final class BlobLayerTree {
     // MARK: Loops
 
     /// Replaces every loop and scheduled animation with the program's, all starting `extraDelay`
-    /// later (the blink of a transition). Under Reduce Motion nothing loops. `keepingHaloLoop` leaves
-    /// a running halo breath in place (the glide into your turn).
-    private func installLoops(_ program: BlobProgram, size: CGFloat, extraDelay: TimeInterval, keepingHaloLoop: Bool = false) {
+    /// after `now` (the blink of a transition). Under Reduce Motion nothing loops. `keepingHaloLoop`
+    /// leaves a running halo breath in place (the glide into your turn). `now` is the caller's clock
+    /// read, so the loops start exactly where its one-shots end however long building them took.
+    private func installLoops(
+        _ program: BlobProgram, size: CGFloat, extraDelay: TimeInterval, keepingHaloLoop: Bool = false,
+        now: CFTimeInterval = CACurrentMediaTime()
+    ) {
         settleSwap()
         removeLoops(keepingHaloLoop: keepingHaloLoop)
         guard !reduceMotion else { return }
-        installSwap(program, size: size, extraDelay: extraDelay)
+        installSwap(program, size: size, extraDelay: extraDelay, now: now)
         for var track in program.tracks {
             track.delay += extraDelay
-            install(track, body: program.body, size: size)
+            install(track, body: program.body, size: size, now: now)
         }
         if let loop = program.bodyLoop {
             var delayed = loop
             delayed.delay += extraDelay
-            let now = scaler.convertTime(CACurrentMediaTime(), from: nil)
-            scaler.add(EyeAnimations.breath(delayed, phase: applied?.identity.breathPhase ?? 0, now: now), forKey: "loop.breath")
+            scaler.add(EyeAnimations.breath(delayed, phase: applied?.identity.breathPhase ?? 0, now: scaler.convertTime(now, from: nil)), forKey: "loop.breath")
         }
         if let grow = program.grow, !attentionTakeover {
             scaler.add(BlobAnimations.grow(grow, phase: applied?.identity.pulsePhase ?? 0), forKey: "loop.grow")
@@ -888,27 +891,23 @@ final class BlobLayerTree {
         if let scheduled = program.scheduledBody {
             let to = bodyPath(scheduled.body, size: size)
             for layer in bodyLayers {
-                let now = layer.convertTime(CACurrentMediaTime(), from: nil)
-                layer.add(BlobAnimations.morph(from: layer.path, to: to, delay: scheduled.after + extraDelay, duration: scheduled.duration, now: now, keep: true), forKey: "sched.body")
+                layer.add(BlobAnimations.morph(from: layer.path, to: to, delay: scheduled.after + extraDelay, duration: scheduled.duration, now: layer.convertTime(now, from: nil), keep: true), forKey: "sched.body")
             }
             if program.halo != nil {
-                let now = halo.convertTime(CACurrentMediaTime(), from: nil)
                 let target = haloPath(scheduled.body, restScale: program.restScale, size: size)
-                halo.add(BlobAnimations.morph(keyPath: Self.haloPathKey, from: halo.shadowPath, to: target, delay: scheduled.after + extraDelay, duration: scheduled.duration, now: now, keep: true), forKey: "sched.body")
+                halo.add(BlobAnimations.morph(keyPath: Self.haloPathKey, from: halo.shadowPath, to: target, delay: scheduled.after + extraDelay, duration: scheduled.duration, now: halo.convertTime(now, from: nil), keep: true), forKey: "sched.body")
             }
         }
         if let pulse = program.eyePulse {
             for eye in eyeLayers {
-                let now = eye.convertTime(CACurrentMediaTime(), from: nil)
-                eye.add(BlobAnimations.eyePulse(pulse, delay: extraDelay, now: now), forKey: "loop.eyeOpacity")
+                eye.add(BlobAnimations.eyePulse(pulse, delay: extraDelay, now: eye.convertTime(now, from: nil)), forKey: "loop.eyeOpacity")
             }
         }
     }
 
-    private func install(_ track: BlobTrack, body: BlobBody, size: CGFloat) {
+    private func install(_ track: BlobTrack, body: BlobBody, size: CGFloat, now: CFTimeInterval = CACurrentMediaTime()) {
         for (eye, mirrored) in [(eyeLeft, false), (eyeRight, true)] {
-            let now = eye.convertTime(CACurrentMediaTime(), from: nil)
-            let animation = BlobAnimations.keyframes(for: track, now: now) { pose in
+            let animation = BlobAnimations.keyframes(for: track, now: eye.convertTime(now, from: nil)) { pose in
                 BlobEyes.path(for: pose, body: body, faceSize: size, mirrored: mirrored)
             }
             eye.add(animation, forKey: track.key)

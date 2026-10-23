@@ -1,11 +1,13 @@
 import SwiftUI
+import WallflowerHookCore
 
 /// The welcome window's content: the app's one branded moment. Pure black, the real faces, one
-/// accent, generous spacing. Four pages slide and crossfade on a spring (fades only under Reduce
-/// Motion); page dots, "Back" from page 2, the primary button answers Return.
+/// accent, generous spacing. Six pages slide and crossfade on a spring (fades only under Reduce
+/// Motion); page dots, "Back" from page 2, the primary button answers Return. With agents ticked,
+/// "Start" first lays every file change over the page in one confirmation.
 struct WelcomeView: View {
     @Bindable var model: WelcomeModel
-    /// The face style and filter in force; the welcome always colours by status.
+    /// The look in force; the face style follows "Pick a look", and every page but that one colours by status.
     var look: PanelLook
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -24,6 +26,13 @@ struct WelcomeView: View {
             bottomBar
         }
         .padding(.top, WelcomeStyle.titlebarHeight)
+        .overlay {
+            if let items = model.confirmation {
+                WelcomeAgentConfirmation(model: model, items: items)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: model.confirmation != nil)
         .frame(width: WelcomeStyle.size.width, height: WelcomeStyle.size.height)
         .background(Color.black)
         // The content runs under the transparent titlebar; the top padding above already keeps clear of it.
@@ -35,21 +44,65 @@ struct WelcomeView: View {
 
     // MARK: Pages
 
-    /// Page 1 is centred; pages 2 to 4 hang from the same top line, so their titles do not jump.
+    /// Page 1 is centred; pages 2 to 6 hang from the same top line, so their titles do not jump.
     @ViewBuilder
     private func page(_ number: Int) -> some View {
         switch number {
         case 1: hello
         case 2: shapeIsStatus.topAligned()
-        case 3: hoverClickDrag.topAligned()
+        case WelcomeModel.lookPage: pickALook.topAligned()
+        case 4: hoverClickDrag.topAligned()
+        case WelcomeModel.agentsPage: WelcomeAgentsPage(model: model).topAligned()
         default: setUp.topAligned()
         }
     }
 
-    private var welcomeLook: PanelLook {
+    /// The look picked on page 3.
+    private var chosenLook: PanelLook {
         var look = look
+        look.faceStyle = model.faceStyle
+        look.colorMode = model.colorMode
+        return look
+    }
+
+    private var welcomeLook: PanelLook {
+        var look = chosenLook
         look.colorMode = .status
         return look
+    }
+
+    /// Face and Colour, the same settings as Settings > Appearance, with four faces showing the result.
+    private var pickALook: some View {
+        VStack(spacing: 0) {
+            WelcomeTitle("Pick a look")
+            StatusFaceSamples(
+                look: chosenLook, idleSince: model.idleSince, faceSize: 48, spacing: 34,
+                labelFont: .system(size: 11, weight: .medium), labelColor: WelcomeStyle.secondary, labelGap: 10
+            )
+            // A new face style builds the faces anew, so the samples follow it at once.
+            .id(model.faceStyle)
+            .padding(.top, 28)
+            VStack(spacing: 0) {
+                WelcomeChoiceRow(title: "Face") {
+                    WelcomeSegmentedPicker(selection: $model.faceStyle, values: FaceStyle.settingsOrder, labels: FaceStyle.settingsOrder.map(\.settingsTitle), accessibilityLabel: "Face")
+                }
+                Rectangle().fill(WelcomeStyle.hairline).frame(width: WelcomeStyle.setUpCardWidth, height: 1)
+                WelcomeChoiceRow(title: "Colour") {
+                    WelcomeSegmentedPicker(
+                        selection: $model.colorMode, values: Theme.ColorMode.settingsOrder, labels: Theme.ColorMode.settingsOrder.map(\.settingsTitle),
+                        accessibilityLabel: "Colour"
+                    )
+                }
+            }
+            .frame(width: WelcomeStyle.setUpCardWidth)
+            .background(WelcomeStyle.panelFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(WelcomeStyle.hairline))
+            .padding(.top, 26)
+            Text("Change it any time in Settings > Appearance.")
+                .font(.system(size: 12))
+                .foregroundStyle(WelcomeStyle.tertiary)
+                .padding(.top, 14)
+        }
     }
 
     private var hello: some View {
@@ -106,8 +159,11 @@ struct WelcomeView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Where do you run Claude Code?")
                         .font(.system(size: 13, weight: .medium))
-                    WelcomeSourcePicker(selection: $model.sessionSource)
-                        .frame(width: WelcomeStyle.setUpContentWidth)
+                    WelcomeSegmentedPicker(
+                        selection: $model.sessionSource, values: SessionSource.allCases, labels: SessionSource.allCases.map(\.shortTitle),
+                        accessibilityLabel: "Where do you run Claude Code?"
+                    )
+                    .frame(width: WelcomeStyle.setUpContentWidth)
                 }
                 .frame(width: WelcomeStyle.setUpContentWidth, alignment: .leading)
                 .padding(WelcomeStyle.setUpInset)
@@ -230,30 +286,33 @@ enum WelcomeStyle {
     static let setUpContentWidth: CGFloat = setUpCardWidth - 2 * setUpInset
 }
 
-/// "Where do you run Claude Code?": a segmented control whose three segments share the width it is
-/// given (`fillEqually`), so it spans the card's content exactly. SwiftUI's segmented picker never
-/// grows past its labels' natural width (it sat centred, narrower than the card) and could take that
-/// natural width when it was wider than the card. The labels are `SessionSource.shortTitle`.
-struct WelcomeSourcePicker: NSViewRepresentable {
-    @Binding var selection: SessionSource
+/// A segmented control whose segments share the width it is given (`fillEqually`), so it spans a
+/// card's content exactly: "Where do you run Claude Code?" (`SessionSource.shortTitle`), and Face and
+/// Colour on "Pick a look". SwiftUI's segmented picker never grows past its labels' natural width (it
+/// sat centred, narrower than the card) and could take that natural width when it was wider than the card.
+struct WelcomeSegmentedPicker<Value: Hashable>: NSViewRepresentable {
+    @Binding var selection: Value
+    let values: [Value]
+    let labels: [String]
+    let accessibilityLabel: String
 
     func makeNSView(context: Context) -> NSSegmentedControl {
         let control = NSSegmentedControl(
-            labels: SessionSource.allCases.map(\.shortTitle), trackingMode: .selectOne,
+            labels: labels, trackingMode: .selectOne,
             target: context.coordinator, action: #selector(Coordinator.changed(_:))
         )
         control.segmentDistribution = .fillEqually
         // The welcome's one accent is mint; the selection stays neutral (the grey of an inactive window)
         // instead of AppKit's blue accent in a key window.
         control.selectedSegmentBezelColor = NSColor(white: 0.22, alpha: 1)
-        control.setAccessibilityLabel("Where do you run Claude Code?")
+        control.setAccessibilityLabel(accessibilityLabel)
         control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return control
     }
 
     func updateNSView(_ control: NSSegmentedControl, context: Context) {
         context.coordinator.selection = $selection
-        if let index = SessionSource.allCases.firstIndex(of: selection), control.selectedSegment != index {
+        if let index = values.firstIndex(of: selection), control.selectedSegment != index {
             control.selectedSegment = index
         }
     }
@@ -264,22 +323,41 @@ struct WelcomeSourcePicker: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(selection: $selection)
+        Coordinator(selection: $selection, values: values)
     }
 
     @MainActor
     final class Coordinator: NSObject {
-        var selection: Binding<SessionSource>
+        var selection: Binding<Value>
+        let values: [Value]
 
-        init(selection: Binding<SessionSource>) {
+        init(selection: Binding<Value>, values: [Value]) {
             self.selection = selection
+            self.values = values
         }
 
         @objc func changed(_ sender: NSSegmentedControl) {
-            let all = SessionSource.allCases
-            guard all.indices.contains(sender.selectedSegment) else { return }
-            selection.wrappedValue = all[sender.selectedSegment]
+            guard values.indices.contains(sender.selectedSegment) else { return }
+            selection.wrappedValue = values[sender.selectedSegment]
         }
+    }
+}
+
+/// One row of a welcome card: a title on the left, a control filling the rest.
+struct WelcomeChoiceRow<Control: View>: View {
+    let title: String
+    @ViewBuilder var control: () -> Control
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 64, alignment: .leading)
+            control()
+        }
+        .frame(width: WelcomeStyle.setUpContentWidth)
+        .padding(.horizontal, WelcomeStyle.setUpInset)
+        .padding(.vertical, 12)
     }
 }
 
@@ -316,7 +394,7 @@ struct WelcomeBody: View {
 }
 
 private extension View {
-    /// Pages 2 to 4: the content from `WelcomeStyle.pageTop` down, centred horizontally.
+    /// Pages 2 to 6: the content from `WelcomeStyle.pageTop` down, centred horizontally.
     func topAligned() -> some View {
         padding(.top, WelcomeStyle.pageTop)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

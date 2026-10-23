@@ -64,6 +64,7 @@ extension FaceFilter: StoredChoice {}
 extension Theme.ColorMode: StoredChoice {}
 extension Theme.HoverEffect: StoredChoice {}
 extension PanelSide: StoredChoice {}
+extension PanelAutoHide: StoredChoice {}
 
 extension Theme.BlobShapeMode: StoredChoice {
     static var storedChoices: [Theme.BlobShapeMode] { [.status, .identity] }

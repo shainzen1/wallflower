@@ -15,7 +15,7 @@ enum ExternalOpener: Hashable, Sendable {
 /// and a key of the wrong type is treated as absent. Unknown keys are ignored.
 struct ExternalSessionRecord: Decodable, Sendable, Equatable {
     var id: String
-    /// Short display name of the tool ("codex"), shown before the status on hover.
+    /// Short display name of the tool ("codex"), shown after the name on hover.
     var tool: String?
     var name: String?
     var cwd: String?

@@ -25,7 +25,7 @@ struct WelcomeModelTests {
     }
 
     @Test func startReportsTheChoicesOnce() {
-        let model = WelcomeModel(page: 4, sessionSource: .desktop)
+        let model = WelcomeModel(page: WelcomeModel.pageCount, sessionSource: .desktop)
         var outcomes: [WelcomeModel.Outcome] = []
         model.onFinish = { outcomes.append($0) }
         model.sessionSource = .everywhere
@@ -54,7 +54,7 @@ struct WelcomeModelTests {
         #expect(!WelcomeModel.initialLaunchAtLogin(hasCompletedOnboarding: true, isEnabled: false), "turned off since: stays off")
         #expect(WelcomeModel.initialLaunchAtLogin(hasCompletedOnboarding: true, isEnabled: true))
 
-        let model = WelcomeModel(page: 4, sessionSource: .desktop, launchAtLogin: false)
+        let model = WelcomeModel(page: WelcomeModel.pageCount, sessionSource: .desktop, launchAtLogin: false)
         var outcomes: [WelcomeModel.Outcome] = []
         model.onFinish = { outcomes.append($0) }
         model.primary()

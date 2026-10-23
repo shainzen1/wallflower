@@ -291,10 +291,8 @@ struct ThrowTests {
         #expect(model.throwPose(for: pid).opacity == 0, "flying away")
 
         // The fly task hides the session on the main actor; under a parallel test run that turn can
-        // come late, so wait for it (up to 2 s) instead of a fixed 50 ms.
-        for _ in 0..<200 where hidden.count == 0 {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        // come late, so wait for it instead of a fixed 50 ms.
+        #expect(await TestSupport.waitUntil(timeout: 2) { hidden.count == 1 })
         #expect(model.rows.map(\.key) == [pids[1]])
         #expect(hidden.count == 1)
         #expect(model.throwPose(for: pid).opacity == 0, "the departing face stays gone")

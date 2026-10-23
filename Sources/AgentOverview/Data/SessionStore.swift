@@ -28,6 +28,8 @@ final class SessionStore {
     let entrypoints: Set<String>?
     /// The external sessions folder; nil when sessions from other tools are off.
     let externalFolder: URL?
+    /// Tool ids (`codex`) whose sessions are not shown (Settings > Agents).
+    let hiddenTools: Set<String>
     /// Where transcripts live; the insight readers resolve their files through it.
     let locator: TranscriptLocator
 
@@ -64,16 +66,19 @@ final class SessionStore {
     ///   - entrypoints: keep only Claude sessions with one of these entrypoints; `nil` keeps all.
     ///     External sessions are never filtered by it.
     ///   - externalFolder: the external sessions folder; nil leaves sessions from other tools out.
+    ///   - hiddenTools: tool ids whose external sessions are left out.
     ///   - projectsFolder: the `~/.claude/projects` folder holding the transcripts.
     init(
         folder: URL = SessionStore.defaultFolder,
         entrypoints: Set<String>? = DataTuning.defaultEntrypoints,
         externalFolder: URL? = nil,
+        hiddenTools: Set<String> = [],
         projectsFolder: URL = TranscriptLocator.defaultProjectsFolder
     ) {
         self.folder = folder
         self.entrypoints = entrypoints
         self.externalFolder = externalFolder
+        self.hiddenTools = hiddenTools
         locator = TranscriptLocator(projectsFolder: projectsFolder)
         // `true` is the Claude registry, `false` the external folder.
         awaitingFirstScan = externalFolder == nil ? [true] : [true, false]
@@ -139,12 +144,16 @@ final class SessionStore {
         )
     }
 
-    /// Applies one scan of the external sessions folder, the same way.
+    /// Applies one scan of the external sessions folder, the same way. Sessions of a tool in
+    /// `hiddenTools` (Settings > Agents, its Show switch off) are left out as if their files were not there.
     func reconcile(_ result: ExternalScanResult) {
-        presentExternalIDs = result.presentIDs
+        let records = hiddenTools.isEmpty ? result.records : result.records.filter { !hiddenTools.contains($0.tool?.lowercased() ?? "") }
+        let present = hiddenTools.isEmpty ? result.presentIDs
+            : result.presentIDs.subtracting(result.records.filter { hiddenTools.contains($0.tool?.lowercased() ?? "") }.map(\.id))
+        presentExternalIDs = present
         merge(
-            result.records.map(SessionSnapshot.init(external:)),
-            present: Set(result.presentIDs.map(SessionKey.external)),
+            records.map(SessionSnapshot.init(external:)),
+            present: Set(present.map(SessionKey.external)),
             claude: false
         )
     }

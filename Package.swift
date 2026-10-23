@@ -22,15 +22,35 @@ let package = Package(
     products: [
         /// The app's public name. The target and module keep the working name `AgentOverview`.
         .executable(name: "Wallflower", targets: ["AgentOverview"]),
+        /// The hook helper other agents' hooks run (`docs/agents.md`), bundled in `Contents/Helpers`.
+        .executable(name: "wallflower-hook", targets: ["WallflowerHook"]),
     ],
     dependencies: [
         /// In-app updates. Pinned exactly: `scripts/release.sh` signs with this version's `sign_update`.
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
     ],
     targets: [
+        /// What the hook helper does, as a library: the app and the tests share it with the helper.
+        /// Foundation only, so the helper starts in a few milliseconds.
+        .target(
+            name: "WallflowerHookCore",
+            path: "Sources/WallflowerHookCore",
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
+        ),
+        .executableTarget(
+            name: "WallflowerHook",
+            dependencies: ["WallflowerHookCore"],
+            path: "Sources/WallflowerHook",
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
+        ),
         .executableTarget(
             name: "AgentOverview",
             dependencies: [
+                "WallflowerHookCore",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources/AgentOverview",
@@ -46,7 +66,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AgentOverviewTests",
-            dependencies: ["AgentOverview"],
+            dependencies: ["AgentOverview", "WallflowerHookCore"],
             path: "Tests/AgentOverviewTests",
             resources: [.copy("../Fixtures")],
             swiftSettings: [
