@@ -38,6 +38,9 @@ cp "$ROOT/Packaging/Sounds/ping.wav" "$CONTENTS/Resources/ping.wav"
 # The licenses travel with the app: ours, and Sparkle's (THIRD_PARTY_NOTICES.md).
 cp "$ROOT/LICENSE" "$CONTENTS/Resources/LICENSE.txt"
 cp "$SPARKLE_ARTIFACT/LICENSE" "$CONTENTS/Resources/Sparkle-LICENSE.txt"
+# Settings > What's New reads the release notes from the changelog itself (ReleaseNotes.bundled). In a
+# publish.sh export its [Unreleased] section is already this release.
+cp "$ROOT/CHANGELOG.md" "$CONTENTS/Resources/CHANGELOG.md"
 printf 'APPL????' > "$CONTENTS/PkgInfo"
 
 # ditto keeps the framework's symlinks. The binary finds it through the rpath

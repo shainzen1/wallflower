@@ -4,6 +4,17 @@ All notable changes to Wallflower are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions have two parts from 1.4 on (1.4, 1.5, ...); the releases before it were 0.1.0 to 0.1.3.
 
+## [1.6] - 2026-10-27
+
+### Added
+
+- **What's New**: after an update, Settings opens once on a new What's New tab with the version's changes as New, Improved and Fixed, and the earlier versions below. It comes to the front without taking the keyboard from the app you're in. **What's New…** in the menu bar menu opens it anytime.
+
+### Changed
+
+- The welcome tour explains more with less: the faces page now shows your turn next to needs you, working and idle, a new page lets you pick and preview the sound, and another shows what an action face is and where to add one.
+- New versions show up sooner and more quietly: Wallflower now asks GitHub about once an hour instead of once a week, and when a new version is out the menu bar icon turns green within about an hour, without a window popping up. Click the update in the menu bar menu to see what changed.
+
 ## [1.5] - 2026-10-27
 
 ### Added
@@ -103,6 +114,7 @@ The first public release.
 
 - The welcome's Set up page keeps the "Where do you run Claude Code?" choice and the Launch at login switch inside their card.
 
+[1.6]: https://github.com/shainzen1/wallflower/compare/v1.5...v1.6
 [1.5]: https://github.com/shainzen1/wallflower/compare/v1.4...v1.5
 [1.4]: https://github.com/shainzen1/wallflower/compare/v0.1.3...v1.4
 [0.1.3]: https://github.com/shainzen1/wallflower/compare/v0.1.2...v0.1.3

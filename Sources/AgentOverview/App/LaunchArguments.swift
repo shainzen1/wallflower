@@ -68,7 +68,7 @@ struct LaunchArguments {
     /// scripted launch only for a build with its own bundle id (see docs/DEVELOPMENT.md).
     var updates: Bool?
     /// `--check-for-updates <ui|background>`: check right after launch, as "Check Now" does (Sparkle's
-    /// windows) or as the weekly schedule does (quiet unless there is an update).
+    /// windows) or as the hourly schedule does (no window; a find only tints the menu bar glyph).
     var checkForUpdates: UpdateCheck?
 
     /// What `--check-for-updates` runs.
@@ -91,8 +91,19 @@ struct LaunchArguments {
         defaultsSuite == nil ? nil : fakePendingUpdate
     }
 
-    /// `--show-settings <general|appearance|sound|agents|about>`: open the Settings window on that tab at launch.
+    /// `--show-settings <general|appearance|sound|agents|whats-new|about>`: open the Settings window on that tab at launch.
     var showSettings: SettingsTab?
+    /// `--whats-new`: open Settings on What's New at launch, as the first launch after an update does.
+    var whatsNew = false
+    /// `--whats-new-check`: run the after-update rule (`WhatsNewLaunch`) in a scripted launch too, on
+    /// the suite's stored version, and log its decision.
+    var whatsNewCheck = false
+
+    /// Whether this launch applies the after-update rule: always, except in a scripted launch
+    /// (`--defaults-suite`, `--snapshot`) unless `--whats-new-check` asks.
+    var checksWhatsNew: Bool {
+        whatsNewCheck || (defaultsSuite == nil && snapshot == nil)
+    }
     /// `--welcome-keys <return,escape,...>`: with `--welcome`, press these keys in the welcome window one
     /// after the other (key equivalents first, as AppKit dispatches them), log the page after each, then quit.
     var welcomeKeys: [String] = []
@@ -126,10 +137,10 @@ struct LaunchArguments {
             self = .edit(index)
         }
     }
-    /// `--welcome-agents <tool,...>`: tick these agents in the welcome; on the last page (`--welcome 6`)
+    /// `--welcome-agents <tool,...>`: tick these agents in the welcome; on the last page (`--welcome 8`)
     /// also press Start, so the confirmation of every file change shows (for snapshots).
     var welcomeAgents: [String] = []
-    /// `--welcome <1-6>`: open the welcome window on that page at launch, whether or not it was completed.
+    /// `--welcome <1-8>`: open the welcome window on that page at launch, whether or not it was completed.
     var welcomePage: Int?
     /// `--no-welcome`: never show the welcome window on its own at launch (scripted runs).
     var noWelcome = false
@@ -383,6 +394,8 @@ struct LaunchArguments {
                 if let text = iterator.next(), !text.isEmpty { fakePendingUpdate = text }
             case "--show-settings":
                 if let text = iterator.next() { showSettings = SettingsTab(rawValue: text) }
+            case "--whats-new": whatsNew = true
+            case "--whats-new-check": whatsNewCheck = true
             case "--welcome":
                 if let text = iterator.next(), let page = Int(text), (1...WelcomeModel.pageCount).contains(page) { welcomePage = page }
             case "--no-welcome": noWelcome = true

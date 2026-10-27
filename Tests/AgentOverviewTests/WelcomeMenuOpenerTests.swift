@@ -70,7 +70,7 @@ struct WelcomeModelTests {
 
     @Test func pageArgumentIsClamped() {
         #expect(WelcomeModel(page: 0, sessionSource: .desktop).page == 1)
-        #expect(WelcomeModel(page: 7, sessionSource: .desktop).page == WelcomeModel.pageCount)
+        #expect(WelcomeModel(page: 99, sessionSource: .desktop).page == WelcomeModel.pageCount)
     }
 }
 

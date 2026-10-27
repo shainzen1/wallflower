@@ -3,14 +3,41 @@ import Observation
 import WallflowerHookCore
 
 /// State of the welcome window: the page on screen, the direction of the last step (the slide
-/// follows it), the look picked on page 3 (applied as it changes), the agents ticked on page 5 and
-/// the choices of the last page. `finish` hands the outcome to the owner.
+/// follows it), the look and the sound picked on their pages (applied as they change), the agents
+/// ticked and the choices of the last page. `finish` hands the outcome to the owner.
 @Observable @MainActor
 final class WelcomeModel {
-    nonisolated static let pageCount = 6
-    /// "Pick a look" and "Which agents do you use?".
-    nonisolated static let lookPage = 3
-    nonisolated static let agentsPage = 5
+    /// The pages in order, 1-based.
+    enum Page: Int, CaseIterable {
+        case hello = 1
+        /// "Shape is status": what the faces mean.
+        case status
+        case look
+        case sound
+        /// "Hover, click, drag".
+        case gestures
+        /// "Action faces": the saved prompts below the sessions.
+        case actions
+        case agents
+        case setUp
+    }
+
+    nonisolated static let pageCount = Page.allCases.count
+    /// "Pick a look", "Pick a sound" and "Which agents do you use?".
+    nonisolated static let lookPage = Page.look.rawValue
+    nonisolated static let soundPage = Page.sound.rawValue
+    nonisolated static let agentsPage = Page.agents.rawValue
+
+    /// "Pick a sound": the sound, volume and the two moments of Settings > Sound.
+    struct SoundChoices: Equatable {
+        var sound: SoundChoice
+        var volume: Double
+        var onDone: Bool
+        var onNeedsInput: Bool
+
+        /// The defaults of a first launch (`Theme`).
+        static let standard = SoundChoices(sound: Theme.sound, volume: Theme.soundVolume, onDone: Theme.soundOnDone, onNeedsInput: Theme.soundOnNeedsInput)
+    }
 
     /// What closed the window: "Start" with the choices of the last page and the agent plans the
     /// person confirmed, or a dismissal (Esc, the close button, ⌘W). Both count as done.
@@ -69,6 +96,14 @@ final class WelcomeModel {
     var colorMode: Theme.ColorMode {
         didSet { if colorMode != oldValue { onLookChange?(faceStyle, colorMode) } }
     }
+    /// "Pick a sound": written through `onSoundChange` as it changes. Nothing plays by itself; only a
+    /// picked sound and Preview do (`pickSound`, `previewSound`).
+    var sound: SoundChoices {
+        didSet { if sound != oldValue { onSoundChange?(sound) } }
+    }
+    /// The macOS sounds the picker offers, and the custom file's name when one was chosen in Settings.
+    let systemSounds: [String]
+    let customSoundName: String?
     /// "Which agents do you use?": Claude Code, then what was found on this Mac.
     let agentChoices: [AgentChoice]
     /// Agents Wallflower supports that are not on this Mac.
@@ -89,6 +124,10 @@ final class WelcomeModel {
     @ObservationIgnored var onPageWillChange: (() -> Void)?
     /// Writes a new face style or colour mode to the settings.
     @ObservationIgnored var onLookChange: ((FaceStyle, Theme.ColorMode) -> Void)?
+    /// Writes the sound choices to the settings.
+    @ObservationIgnored var onSoundChange: ((SoundChoices) -> Void)?
+    /// Plays the sound in the settings once, at their volume.
+    @ObservationIgnored var onPlaySound: (() -> Void)?
     /// The home the agents' paths are shown relative to (`~/.codex/hooks.json`).
     @ObservationIgnored var agentsHome = FileManager.default.homeDirectoryForCurrentUser
     /// Plans Connect for the ticked agents (the owner reads their files only now).
@@ -98,6 +137,7 @@ final class WelcomeModel {
     init(
         page: Int = 1, sessionSource: SessionSource, launchAtLogin: Bool = true,
         faceStyle: FaceStyle = Theme.faceStyle, colorMode: Theme.ColorMode = Theme.colorMode,
+        sound: SoundChoices = .standard, systemSounds: [String] = [], customSoundName: String? = nil,
         agentChoices: [AgentChoice] = [], missingAgents: [String] = [],
         sessionCount: @escaping (SessionSource) -> Int = { _ in 0 }
     ) {
@@ -106,6 +146,9 @@ final class WelcomeModel {
         self.launchAtLogin = launchAtLogin
         self.faceStyle = faceStyle
         self.colorMode = colorMode
+        self.sound = sound
+        self.systemSounds = systemSounds
+        self.customSoundName = customSoundName
         self.agentChoices = agentChoices
         self.missingAgents = missingAgents
         self.sessionCount = sessionCount
@@ -148,6 +191,25 @@ final class WelcomeModel {
     static let codexMissingNote = "Not found on this Mac. Install the Codex CLI or the ChatGPT app, then connect it in Settings > Agents."
     /// ChatGPT greyed while Codex isn't installed either.
     static let chatGPTWithoutCodexNote = "ChatGPT doesn't share chat status with other apps. Codex does, once it's installed."
+
+    /// The sound the picker shows (the ping for a custom sound without a file or a system sound this
+    /// macOS lacks, as in Settings).
+    var shownSound: SoundChoice {
+        SoundSettingsView.shownChoice(sound.sound, customName: customSoundName, systemSounds: systemSounds)
+    }
+
+    /// The picker: writes the new sound and plays it once, so the person hears what they picked.
+    func pickSound(_ choice: SoundChoice) {
+        guard choice != sound.sound else { return }
+        sound.sound = choice
+        previewSound()
+    }
+
+    /// Preview (and the volume slider let go): plays the sound once, unless it is None or muted.
+    func previewSound() {
+        guard sound.sound != .none, sound.volume > 0 else { return }
+        onPlaySound?()
+    }
 
     func isPicked(_ tool: AgentTool) -> Bool {
         pickedAgents.contains(tool)

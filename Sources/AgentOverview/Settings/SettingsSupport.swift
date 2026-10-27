@@ -4,7 +4,9 @@ import ServiceManagement
 
 /// The tabs of the Settings window.
 enum SettingsTab: String, CaseIterable, Sendable {
-    case general, appearance, sound, agents, about
+    case general, appearance, sound, agents
+    case whatsNew = "whats-new"
+    case about
 
     var title: String {
         switch self {
@@ -12,6 +14,7 @@ enum SettingsTab: String, CaseIterable, Sendable {
         case .appearance: "Appearance"
         case .sound: "Sound"
         case .agents: "Agents"
+        case .whatsNew: "What's New"
         case .about: "About"
         }
     }
@@ -23,6 +26,7 @@ enum SettingsTab: String, CaseIterable, Sendable {
         case .appearance: "paintpalette"
         case .sound: "speaker.wave.2"
         case .agents: "person.2"
+        case .whatsNew: "sparkles"
         case .about: "info.circle"
         }
     }

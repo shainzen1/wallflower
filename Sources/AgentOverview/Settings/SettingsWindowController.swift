@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// The Settings window: the classic macOS preferences look, a toolbar with one item per tab
-/// (General, Appearance, Sound, Agents, About), the window title following the tab, not resizable, its height
+/// (General, Appearance, Sound, Agents, What's New, About), the window title following the tab, not resizable, its height
 /// animating to fit each tab up to `maxContentHeight`, past which the tab scrolls. Each tab is a SwiftUI
 /// grouped `Form` in an `NSHostingController`.
 /// Created on demand and released when closed (`onClose`).
@@ -31,10 +31,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     /// - Parameters:
     ///   - actionStore: the action faces, for the actions editor on the General tab.
-    ///   - showsAdvanced: open the Appearance tab's Advanced disclosure (`--settings-advanced`).
+    ///   - showsAdvanced: open the Appearance tab's Advanced disclosure (`--settings-advanced`), and
+    ///     the newest earlier version on What's New.
+    ///   - releaseNotes: What's New's notes, the bundled changelog by default.
     init(
         settings: AppSettings, launchAtLogin: LaunchAtLogin, updater: AppUpdater? = nil, actions: SettingsActions, actionStore: ActionStore? = nil,
-        agents: AgentsModel? = nil, sounds: SoundController? = nil, tab: SettingsTab = .general, showsAdvanced: Bool = false
+        agents: AgentsModel? = nil, sounds: SoundController? = nil, tab: SettingsTab = .general, showsAdvanced: Bool = false,
+        releaseNotes: [ReleaseNotes] = ReleaseNotes.bundled
     ) {
         let accessibility = AccessibilityAccess()
         let actionEditor = actionStore.map { ActionEditorModel(store: $0) }
@@ -57,6 +60,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let sounds = sounds ?? SoundController(settings: settings, folder: URL(filePath: "/nonexistent/Sounds", directoryHint: .isDirectory))
         tabs.addTab(SettingsTab.sound, content: SoundSettingsView(settings: settings, sounds: sounds, state: SoundViewState()))
         tabs.addTab(SettingsTab.agents, content: AgentsSettingsView(model: agents, settings: settings))
+        let whatsNew = WhatsNewContent(version: AppInfo.version, releases: releaseNotes)
+        let expanded: Set<String> = showsAdvanced ? Set(whatsNew.earlier.prefix(1).map(\.version)) : []
+        tabs.addTab(SettingsTab.whatsNew, content: WhatsNewSettingsView(content: whatsNew, state: WhatsNewViewState(expanded: expanded)))
         tabs.addTab(SettingsTab.about, content: AboutSettingsView(actions: actions))
         tabs.selectedTabViewItemIndex = SettingsTab.allCases.firstIndex(of: tab) ?? 0
 
@@ -90,13 +96,19 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     }
 
     /// Brings the window to the front on `tab` (or the tab it shows) and activates the app, which is
-    /// an accessory and would otherwise leave the window behind the frontmost app.
-    func show(tab: SettingsTab? = nil) {
+    /// an accessory and would otherwise leave the window behind the frontmost app. Without
+    /// `activates` (What's New after an update) the window comes to the front without the app taking
+    /// the keyboard from the one in use; a click makes it key.
+    func show(tab: SettingsTab? = nil, activates: Bool = true) {
         if let tab, let index = SettingsTab.allCases.firstIndex(of: tab), index != tabs.selectedTabViewItemIndex {
             tabs.selectedTabViewItemIndex = index
         }
         launchAtLogin.refresh()
         accessibility.refresh()
+        guard activates else {
+            window?.orderFrontRegardless()
+            return
+        }
         NSApp.activate()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)

@@ -71,7 +71,7 @@ struct GeneralSettingsView: View {
         .scrollDisabled(true)
     }
 
-    /// "Check for updates automatically" (weekly, Sparkle's setting) and "Check Now" with the last check.
+    /// "Check for updates automatically" (hourly, Sparkle's setting) and "Check Now" with the last check.
     private var updatesSection: some View {
         let running = updater?.isRunning == true
         return Section {
@@ -93,8 +93,8 @@ struct GeneralSettingsView: View {
         }
     }
 
-    /// What the weekly check sends, in the words of the README's Privacy section.
-    static let updatesFootnote = "Once a week \(AppInfo.name) asks GitHub whether a newer version is out. It sends no system profile and nothing else."
+    /// What the hourly check sends, in the words of the README's Privacy section.
+    static let updatesFootnote = "About once an hour \(AppInfo.name) asks GitHub whether a newer version is out, and its menu bar icon turns green when one is. It sends no system profile and nothing else."
 }
 
 /// Secondary text under a section, aligned with the section's content.

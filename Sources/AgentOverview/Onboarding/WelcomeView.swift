@@ -2,7 +2,7 @@ import SwiftUI
 import WallflowerHookCore
 
 /// The welcome window's content: the app's one branded moment. Pure black, the real faces, one
-/// accent, generous spacing. Six pages slide and crossfade on a spring (fades only under Reduce
+/// accent, generous spacing. Eight pages (`WelcomeModel.Page`) slide and crossfade on a spring (fades only under Reduce
 /// Motion); page dots, "Back" from page 2, the primary button answers Return. With agents ticked,
 /// "Start" first lays every file change over the page in one confirmation.
 struct WelcomeView: View {
@@ -44,20 +44,22 @@ struct WelcomeView: View {
 
     // MARK: Pages
 
-    /// Page 1 is centred; pages 2 to 6 hang from the same top line, so their titles do not jump.
+    /// The first page is centred; the others hang from the same top line, so their titles do not jump.
     @ViewBuilder
     private func page(_ number: Int) -> some View {
-        switch number {
-        case 1: hello
-        case 2: shapeIsStatus.topAligned()
-        case WelcomeModel.lookPage: pickALook.topAligned()
-        case 4: hoverClickDrag.topAligned()
-        case WelcomeModel.agentsPage: WelcomeAgentsPage(model: model).topAligned()
-        default: setUp.topAligned()
+        switch WelcomeModel.Page(rawValue: number) ?? .hello {
+        case .hello: hello
+        case .status: shapeIsStatus.topAligned()
+        case .look: pickALook.topAligned()
+        case .sound: WelcomeSoundPage(model: model, look: welcomeLook).topAligned()
+        case .gestures: hoverClickDrag.topAligned()
+        case .actions: WelcomeActionsPage(look: chosenLook).topAligned()
+        case .agents: WelcomeAgentsPage(model: model).topAligned()
+        case .setUp: setUp.topAligned()
         }
     }
 
-    /// The look picked on page 3.
+    /// The look picked on "Pick a look".
     private var chosenLook: PanelLook {
         var look = look
         look.faceStyle = model.faceStyle
@@ -86,7 +88,7 @@ struct WelcomeView: View {
                 WelcomeChoiceRow(title: "Face") {
                     WelcomeSegmentedPicker(selection: $model.faceStyle, values: FaceStyle.settingsOrder, labels: FaceStyle.settingsOrder.map(\.settingsTitle), accessibilityLabel: "Face")
                 }
-                Rectangle().fill(WelcomeStyle.hairline).frame(width: WelcomeStyle.setUpCardWidth, height: 1)
+                WelcomeHairline()
                 WelcomeChoiceRow(title: "Colour") {
                     WelcomeSegmentedPicker(
                         selection: $model.colorMode, values: Theme.ColorMode.settingsOrder, labels: Theme.ColorMode.settingsOrder.map(\.settingsTitle),
@@ -94,9 +96,7 @@ struct WelcomeView: View {
                     )
                 }
             }
-            .frame(width: WelcomeStyle.setUpCardWidth)
-            .background(WelcomeStyle.panelFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(WelcomeStyle.hairline))
+            .welcomeCard()
             .padding(.top, 26)
             Text("Change it any time in Settings > Appearance.")
                 .font(.system(size: 12))
@@ -127,13 +127,10 @@ struct WelcomeView: View {
     private var shapeIsStatus: some View {
         VStack(spacing: 0) {
             WelcomeTitle("Shape is status")
-            StatusFaceSamples(
-                look: welcomeLook, idleSince: model.idleSince, faceSize: 56, spacing: 40,
-                labelFont: .system(size: 12, weight: .medium), labelColor: WelcomeStyle.secondary, labelGap: 12
-            )
-            .padding(.top, 34)
-            WelcomeBody("Every session gets a face on the right edge. Its shape tells you what it's doing, so the one that needs you stands out without a hover.")
-                .padding(.top, 34)
+            WelcomeStatusLegend(look: welcomeLook, idleSince: model.idleSince)
+                .padding(.top, 32)
+            WelcomeBody("Every session gets a face on the edge of your screen. The two that want you glow, so they stand out.")
+                .padding(.top, 30)
         }
     }
 
@@ -167,7 +164,7 @@ struct WelcomeView: View {
                 }
                 .frame(width: WelcomeStyle.setUpContentWidth, alignment: .leading)
                 .padding(WelcomeStyle.setUpInset)
-                Rectangle().fill(WelcomeStyle.hairline).frame(width: WelcomeStyle.setUpCardWidth, height: 1)
+                WelcomeHairline()
                 HStack(spacing: 0) {
                     Text("Launch at login")
                         .font(.system(size: 13, weight: .medium))
@@ -180,9 +177,7 @@ struct WelcomeView: View {
                 .padding(.horizontal, WelcomeStyle.setUpInset)
                 .padding(.vertical, 12)
             }
-            .frame(width: WelcomeStyle.setUpCardWidth)
-            .background(WelcomeStyle.panelFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(WelcomeStyle.hairline))
+            .welcomeCard()
             .padding(.top, 28)
             Text("No sessions yet. Start one and its face appears on the edge.")
                 .font(.system(size: 12))
@@ -272,7 +267,7 @@ enum WelcomeStyle {
     /// The transparent titlebar the content runs under (the close button sits there).
     static let titlebarHeight: CGFloat = 28
     static let bottomBarHeight: CGFloat = 56
-    /// Where the titles of pages 2 to 4 start, below the titlebar.
+    /// Where the titles of every page but the first start, below the titlebar.
     static let pageTop: CGFloat = 50
     /// The one accent: the mint of a finished session.
     static let accent = Color(red: 0.45, green: 1.0, blue: 0.72)
@@ -393,15 +388,29 @@ struct WelcomeBody: View {
     }
 }
 
-private extension View {
-    /// Pages 2 to 6: the content from `WelcomeStyle.pageTop` down, centred horizontally.
-    func topAligned() -> some View {
+extension View {
+    /// Every page but the first: the content from `WelcomeStyle.pageTop` down, centred horizontally.
+    fileprivate func topAligned() -> some View {
         padding(.top, WelcomeStyle.pageTop)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
+
+    /// A welcome card: `WelcomeStyle.setUpCardWidth` wide, the soft fill, a hairline border.
+    func welcomeCard() -> some View {
+        frame(width: WelcomeStyle.setUpCardWidth)
+            .background(WelcomeStyle.panelFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(WelcomeStyle.hairline))
+    }
 }
 
-/// One gesture of page 3: a symbol on a soft tile, one sentence.
+/// The line between two rows of a welcome card, the card's full width.
+struct WelcomeHairline: View {
+    var body: some View {
+        Rectangle().fill(WelcomeStyle.hairline).frame(width: WelcomeStyle.setUpCardWidth, height: 1)
+    }
+}
+
+/// One line of "Hover, click, drag" and "Action faces": a symbol on a soft tile, one sentence.
 struct WelcomeGestureRow: View {
     let symbol: String
     let text: String

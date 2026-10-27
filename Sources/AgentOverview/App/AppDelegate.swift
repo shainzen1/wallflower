@@ -132,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             resetPosition: { [weak self] in self?.resetPosition() },
             openSettings: { [weak self] in self?.openSettings() },
             showWelcome: { [weak self] in self?.showWelcome() },
+            showWhatsNew: { [weak self] in self?.openSettings(tab: .whatsNew) },
             updateTitle: { [weak self] in AppUpdater.menuTitle(pendingVersion: self?.updater.pendingVersion) },
             pendingUpdate: { [weak self] in self?.updater.pendingVersion },
             canCheckForUpdates: { [weak self] in self?.updater.canCheckForUpdates == true },
@@ -369,7 +370,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Opens the Settings window (created on demand, released when closed), on `tab` if given.
-    func openSettings(tab: SettingsTab? = nil) {
+    /// `activates` false brings it to the front without taking the keyboard (`SettingsWindowController.show`).
+    func openSettings(tab: SettingsTab? = nil, activates: Bool = true) {
         if settingsWindow == nil {
             let agents = AgentsModel(environment: agentEnvironment, settings: settings)
             agents.showsImpossible = arguments.settingsAdvanced
@@ -384,7 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             settingsWindow = controller
         }
-        settingsWindow?.show(tab: tab)
+        settingsWindow?.show(tab: tab, activates: activates)
     }
 
     @objc private func openSettingsFromMenu() {
@@ -414,7 +416,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launchAtLogin: WelcomeModel.initialLaunchAtLogin(
                 hasCompletedOnboarding: settings.hasCompletedOnboarding, isEnabled: launchAtLogin.isEnabled
             ),
-            faceStyle: settings.faceStyle, colorMode: settings.colorMode, agentChoices: agents.choices, missingAgents: agents.missing
+            faceStyle: settings.faceStyle, colorMode: settings.colorMode,
+            sound: WelcomeModel.SoundChoices(
+                sound: settings.sound, volume: settings.soundVolume, onDone: settings.soundOnDone, onNeedsInput: settings.soundOnNeedsInput
+            ),
+            systemSounds: SoundLibrary.systemSoundNames(), customSoundName: settings.customSoundName,
+            agentChoices: agents.choices, missingAgents: agents.missing
         ) { [weak self] source in
             self?.sessionCount(for: source) ?? 0
         }
@@ -423,6 +430,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.settings.faceStyle = style
             self?.settings.colorMode = colorMode
         }
+        // "Pick a sound" writes the same settings as Settings > Sound, and plays through the same controller.
+        model.onSoundChange = { [weak self] choices in
+            guard let settings = self?.settings else { return }
+            if settings.sound != choices.sound { settings.sound = choices.sound }
+            if settings.soundVolume != choices.volume { settings.soundVolume = choices.volume }
+            if settings.soundOnDone != choices.onDone { settings.soundOnDone = choices.onDone }
+            if settings.soundOnNeedsInput != choices.onNeedsInput { settings.soundOnNeedsInput = choices.onNeedsInput }
+        }
+        model.onPlaySound = { [weak self] in self?.sounds.play() }
         let connector = AgentConnector(environment: agentEnvironment)
         model.agentsHome = agentEnvironment.home
         model.planAgents = { tools in
@@ -512,11 +528,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 Self.scrollSettings(points, in: window)
             }
         }
+        if arguments.whatsNew { openSettings(tab: .whatsNew) }
+        showWhatsNewAfterUpdate()
         if let page = arguments.welcomePage {
             showWelcome(page: page)
         } else if !settings.hasCompletedOnboarding, !arguments.noWelcome, arguments.snapshot == nil {
             showWelcome()
         }
+    }
+
+    /// The first launch after an update opens Settings on What's New once (`WhatsNewLaunch`): in
+    /// front, but without taking the keyboard from the app in use, since the relaunch may come
+    /// while the person types elsewhere. A fresh install only records the version (the welcome has
+    /// that launch). A scripted launch leaves both alone unless `--whats-new-check` asks.
+    private func showWhatsNewAfterUpdate() {
+        guard arguments.checksWhatsNew else { return }
+        let version = AppInfo.version
+        let decision = WhatsNewLaunch.decide(
+            lastSeen: settings.lastSeenVersion, current: version, hasCompletedOnboarding: settings.hasCompletedOnboarding,
+            hasNotes: WhatsNewContent(version: version, releases: ReleaseNotes.bundled).current != nil
+        )
+        if decision.record != nil || arguments.whatsNewCheck {
+            NSLog("\(AppInfo.name): what's new: last seen %@, now %@: %@", settings.lastSeenVersion ?? "none", version,
+                  decision.opens ? "opens" : decision.record != nil ? "records only" : "nothing to do")
+        }
+        if let record = decision.record { settings.lastSeenVersion = record }
+        if decision.opens, !arguments.whatsNew { openSettings(tab: .whatsNew, activates: false) }
     }
 
     // MARK: Panel actions

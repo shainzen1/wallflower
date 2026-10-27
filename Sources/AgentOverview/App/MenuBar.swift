@@ -4,7 +4,7 @@ import Observation
 /// The status item: the blob glyph (`MenuBarIcon`, the drop while a session needs input, green while
 /// an update waits) and the app menu. The menu is rebuilt each time it opens: a status line, the
 /// sessions themselves (click opens one like the panel does), panel visibility and position,
-/// Settings, the update check, the welcome, Quit.
+/// Settings, the update check, What's New, the welcome, Quit.
 ///
 /// The glyph follows the sessions and the updater: `observe()` tracks `Actions.needsInputCount`
 /// (whatever it reads, the store's sessions and their states) and `Actions.pendingUpdate` (the
@@ -28,6 +28,8 @@ final class MenuBar: NSObject, NSMenuDelegate {
         var resetPosition: () -> Void = {}
         var openSettings: () -> Void = {}
         var showWelcome: () -> Void = {}
+        /// Settings on What's New.
+        var showWhatsNew: () -> Void = {}
         /// "Check for Updates…", or the update a check found (`AppUpdater.menuTitle`).
         var updateTitle: () -> String = { AppUpdater.menuTitle(pendingVersion: nil) }
         /// The update waiting to be installed (read under observation: the glyph turns green).
@@ -115,6 +117,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         let update = item(actions.updateTitle(), #selector(checkForUpdates))
         update.isEnabled = actions.canCheckForUpdates()
         menu.addItem(update)
+        menu.addItem(item("What's New…", #selector(showWhatsNew)))
         menu.addItem(item("Show welcome…", #selector(showWelcome)))
         menu.addItem(.separator())
         menu.addItem(item("Quit \(AppInfo.name)", #selector(quit), key: "q"))
@@ -164,6 +167,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     @objc private func resetPosition() { actions.resetPosition() }
     @objc private func openSettings() { actions.openSettings() }
     @objc private func showWelcome() { actions.showWelcome() }
+    @objc private func showWhatsNew() { actions.showWhatsNew() }
     @objc private func checkForUpdates() { actions.checkForUpdates() }
 
     @objc private func quit() {

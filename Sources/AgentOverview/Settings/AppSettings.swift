@@ -43,6 +43,7 @@ final class AppSettings {
         static let panelAutoHide = "panelAutoHide"
         static let externalSessions = "externalSessions"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let lastSeenVersion = "lastSeenVersion"
         static let hiddenAgentTools = "hiddenAgentTools"
         static let sound = "sound"
         static let customSoundName = "customSoundName"
@@ -117,6 +118,12 @@ final class AppSettings {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
     }
 
+    /// The version the last launch ran (`CFBundleShortVersionString`); nil before the first launch that
+    /// recorded one. A newer running version opens What's New once (`WhatsNewLaunch`).
+    var lastSeenVersion: String? {
+        didSet { defaults.set(lastSeenVersion, forKey: Key.lastSeenVersion) }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard, overrides: Overrides = Overrides()) {
@@ -145,6 +152,7 @@ final class AppSettings {
         soundOnNeedsInput = (defaults.object(forKey: Key.soundOnNeedsInput) as? Bool) ?? Theme.soundOnNeedsInput
         soundSkipsFrontmost = (defaults.object(forKey: Key.soundSkipsFrontmost) as? Bool) ?? Theme.soundSkipsFrontmost
         hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
+        lastSeenVersion = defaults.string(forKey: Key.lastSeenVersion).flatMap { $0.isEmpty ? nil : $0 }
         hiddenAgentTools = Set(defaults.stringArray(forKey: Key.hiddenAgentTools) ?? [])
     }
 

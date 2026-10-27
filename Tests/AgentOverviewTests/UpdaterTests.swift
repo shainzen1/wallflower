@@ -20,7 +20,7 @@ struct UpdaterInfoPlistTests {
         let info = try info()
         #expect(info["SUFeedURL"] as? String == "https://github.com/shainzen1/wallflower/releases/latest/download/appcast.xml")
         #expect(info["SUEnableAutomaticChecks"] as? Bool == true, "checks without asking first")
-        #expect(info["SUScheduledCheckInterval"] as? Int == 604_800, "once a week")
+        #expect(info["SUScheduledCheckInterval"] as? Int == 3_600, "about once an hour, Sparkle's minimum in a release build")
         #expect(info["SUEnableSystemProfiling"] as? Bool == false, "no system profile")
         #expect(info["SUAutomaticallyUpdate"] as? Bool == false, "the person confirms every install")
         #expect(info["SUVerifyUpdateBeforeExtraction"] as? Bool == true)
@@ -94,6 +94,25 @@ struct UpdaterTests {
         #expect(after([.found("1.4"), .found("1.5")]) == "1.5")
         #expect(after([.chose(.later)]) == nil)
         #expect(after([.found("1.4"), .chose(.skip), .found("1.5"), .chose(.later)]) == "1.5")
+    }
+
+    /// The hourly check runs whether or not the person has answered: finding the same version again
+    /// leaves the glyph as it is, and a skipped version comes back as nothing newer, so it stays plain.
+    @Test func hourlyChecksKeepTheTintRules() {
+        func after(_ events: [AppUpdater.UpdateEvent], from start: String? = nil) -> String? {
+            events.reduce(start) { AppUpdater.pendingVersion(after: $1, current: $0) }
+        }
+        #expect(AppUpdater.pendingVersion(after: .found("1.6"), current: "1.6") == "1.6", "no change, no redraw")
+        #expect(after([.found("1.6"), .found("1.6"), .chose(.later), .found("1.6")]) == "1.6")
+        #expect(after([.found("1.6"), .chose(.skip), .upToDate, .upToDate]) == nil, "a skipped version stays un-tinted")
+        #expect(after([.found("1.6"), .chose(.skip), .upToDate, .found("1.7")]) == "1.7", "a newer release tints again")
+    }
+
+    /// Only a check the person started opens Sparkle's window by itself; a scheduled find waits in the
+    /// menu until the person clicks it.
+    @Test func scheduledFindsOpenNoWindow() {
+        #expect(!AppUpdater.sparkleShowsUpdateWindow(userInitiated: false), "the hourly check only tints")
+        #expect(AppUpdater.sparkleShowsUpdateWindow(userInitiated: true), "Check for Updates… and Check Now show it")
     }
 
     /// A scripted launch with `--fake-pending-update` starts with the version waiting, updater off.

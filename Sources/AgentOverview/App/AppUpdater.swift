@@ -3,10 +3,12 @@ import Observation
 import Sparkle
 
 /// In-app updates through Sparkle's standard updater and its standard windows. Sparkle reads its
-/// configuration from `Packaging/Info.plist` (feed URL, public EdDSA key, a check once a week, no
-/// system profile, no automatic download) and keeps its own state (last check, the person's choice)
-/// in the standard defaults. The weekly check is a one-shot timer inside Sparkle, so nothing of ours
-/// runs at rest.
+/// configuration from `Packaging/Info.plist` (feed URL, public EdDSA key, a check about once an hour,
+/// Sparkle's minimum, no system profile, no automatic download) and keeps its own state (last check,
+/// the person's choice) in the standard defaults. The hourly check is a one-shot timer inside
+/// Sparkle, re-armed after each check (and run at launch when the last one is over an hour old), so
+/// nothing of ours runs at rest. An update the hourly check finds opens no window: it only turns the
+/// menu bar glyph green and renames the menu item (`sparkleShowsUpdateWindow(userInitiated:)`).
 ///
 /// Off for a scripted launch (`--defaults-suite`) unless `--updates on` turns it on: Sparkle would
 /// otherwise write its state into the real app's defaults domain and ask the real feed. Off as well
@@ -94,7 +96,9 @@ final class AppUpdater {
         controller.startUpdater()
     }
 
-    /// "Check for Updates…" and "Check Now": Sparkle's own window shows the result, or the update.
+    /// "Check for Updates…", "Install Wallflower x…" and "Check Now": Sparkle's own window shows the
+    /// result, or the update. While an update the hourly check found waits unseen, Sparkle brings that
+    /// update's window up instead of checking again (`showUpdateInFocus`).
     func checkForUpdates() {
         guard let controller else { return }
         // An accessory app's windows open behind the frontmost app unless it is active.
@@ -102,12 +106,14 @@ final class AppUpdater {
         controller.checkForUpdates(nil)
     }
 
-    /// A check as the weekly schedule runs it: quiet when there is nothing new (`--check-for-updates background`).
+    /// A check as the hourly schedule runs it: no window, a find only tints the glyph
+    /// (`--check-for-updates background`).
     func checkInBackground() {
         controller?.updater.checkForUpdatesInBackground()
     }
 
-    /// Turns the weekly check on or off (stored by Sparkle).
+    /// Turns the hourly check on or off (stored by Sparkle as `SUEnableAutomaticChecks`; the interval
+    /// itself is never written, so `SUScheduledCheckInterval` in Info.plist stays in charge).
     func setAutomaticallyChecks(_ enabled: Bool) {
         guard let controller else { return }
         controller.updater.automaticallyChecksForUpdates = enabled
@@ -115,17 +121,28 @@ final class AppUpdater {
     }
 
     /// The waiting version after `event`. It stays through everything that leaves the update offered:
-    /// "Remind Me Later" (Sparkle drops the update then and only finds it again at the next weekly
-    /// check), merely looking at the window, a failed download, a failed check. Install keeps it too:
+    /// "Remind Me Later" (Sparkle drops the update then and finds it again at the next hourly check,
+    /// which only tints again), merely looking at the window, a failed download, a failed check. An
+    /// hourly check that finds the same version changes nothing. Install keeps it too:
     /// the relaunch into the new version ends this process, and if the install fails the update still
-    /// waits. It clears when the person skips the version or a check finds nothing newer, and a newer
-    /// find replaces it.
+    /// waits. It clears when the person skips the version or a check finds nothing newer (the hourly
+    /// check counts a skipped version as nothing newer), and a newer find replaces it.
     nonisolated static func pendingVersion(after event: UpdateEvent, current: String?) -> String? {
         switch event {
         case .found(let version): version
         case .upToDate, .chose(.skip): nil
         case .chose(.install), .chose(.later): current
         }
+    }
+
+    /// Whether Sparkle opens its update window by itself when a check finds an update: only for a check
+    /// the person started ("Check for Updates…", "Check Now"). A scheduled find (the hourly check,
+    /// `--check-for-updates background`) leaves the window unshown, even right after launch or when the
+    /// Mac is idle, where Sparkle would otherwise bring it to the front; the green glyph and "Install
+    /// Wallflower x…" are the only cue until the person clicks. Sparkle keeps that session open, so no
+    /// further scheduled check runs (or shows anything) until the person answers the window.
+    nonisolated static func sparkleShowsUpdateWindow(userInitiated: Bool) -> Bool {
+        userInitiated
     }
 
     private func record(_ event: UpdateEvent) {
@@ -214,10 +231,17 @@ final class AppUpdater {
 
         var supportsGentleScheduledUpdateReminders: Bool { true }
 
-        /// Sparkle still shows the window itself; this is the gentle reminder's entry point, the same
-        /// version `didFindValidUpdate` recorded (no second change). Neither looking at the window nor
-        /// the end of the session clears it (see `pendingVersion(after:current:)`).
+        /// Asked only for scheduled checks: the window stays unshown (`sparkleShowsUpdateWindow`).
+        func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool) -> Bool {
+            AppUpdater.sparkleShowsUpdateWindow(userInitiated: false)
+        }
+
+        /// The gentle reminder's entry point, for every find: the same version `didFindValidUpdate`
+        /// recorded (no second change). For a scheduled find Sparkle shows nothing; the menu item
+        /// brings the window up through `checkForUpdates()`. Neither looking at the window nor the end of
+        /// the session clears it (see `pendingVersion(after:current:)`).
         func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
+            if !handleShowingUpdate { NSLog("\(AppInfo.name): update %@ waits in the menu", update.displayVersionString) }
             owner?.record(.found(update.displayVersionString))
         }
     }
