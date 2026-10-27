@@ -33,6 +33,8 @@ cp "$BIN_DIR/$NAME" "$CONTENTS/MacOS/$NAME"
 cp "$BIN_DIR/$HELPER" "$CONTENTS/Helpers/$HELPER"
 cp "$ROOT/Packaging/Info.plist" "$CONTENTS/Info.plist"
 cp "$ROOT/Packaging/AppIcon.icns" "$CONTENTS/Resources/AppIcon.icns"
+# The default notification sound, "Wallflower ping" (SoundLibrary; terms in THIRD_PARTY_NOTICES.md).
+cp "$ROOT/Packaging/Sounds/ping.wav" "$CONTENTS/Resources/ping.wav"
 # The licenses travel with the app: ours, and Sparkle's (THIRD_PARTY_NOTICES.md).
 cp "$ROOT/LICENSE" "$CONTENTS/Resources/LICENSE.txt"
 cp "$SPARKLE_ARTIFACT/LICENSE" "$CONTENTS/Resources/Sparkle-LICENSE.txt"

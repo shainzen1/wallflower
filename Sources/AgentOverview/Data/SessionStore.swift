@@ -23,6 +23,10 @@ final class SessionStore {
     @ObservationIgnored private(set) var presentExternalIDs: Set<String> = []
     /// Called once, after the initial scan, with the number of sessions found.
     @ObservationIgnored var onFirstScan: (@MainActor (Int) -> Void)?
+    /// Called after a scan that changed the state of sessions the store already had, with those
+    /// changes. Never for the sessions a scan adds, so the states found at launch or by a new store
+    /// never show up here (`SoundController` listens).
+    @ObservationIgnored var onStateChanges: (@MainActor ([SessionStateChange]) -> Void)?
 
     let folder: URL
     let entrypoints: Set<String>?
@@ -163,6 +167,7 @@ final class SessionStore {
     private func merge(_ snapshots: [SessionSnapshot], present: Set<SessionKey>, claude: Bool) {
         var byKey = Dictionary(sessions.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
         reappearing = reappearing.filter { $0.key.isClaude != claude }
+        var changes: [SessionStateChange] = []
 
         for snapshot in snapshots {
             if let session = byKey[snapshot.key] {
@@ -172,7 +177,9 @@ final class SessionStore {
                     reappearing[snapshot.key] = snapshot
                     continue
                 }
+                let before = session.state
                 session.apply(snapshot: snapshot)
+                if session.state != before { changes.append(SessionStateChange(session: session, from: before, to: session.state)) }
                 // The registry is rewritten after the transcript line that caused the status change,
                 // so a recompute here sees the complete transcript. Cached stamps make it free otherwise.
                 if let sessionId = snapshot.transcriptSessionId {
@@ -190,6 +197,7 @@ final class SessionStore {
         }
 
         resort()
+        if !changes.isEmpty { onStateChanges?(changes) }
         awaitingFirstScan.remove(claude)
         if !hasScanned, awaitingFirstScan.isEmpty {
             hasScanned = true
@@ -271,4 +279,11 @@ final class SessionStore {
             resort()
         }
     }
+}
+
+/// One session's state change in a scan (`SessionStore.onStateChanges`).
+struct SessionStateChange {
+    let session: Session
+    let from: SessionState
+    let to: SessionState
 }

@@ -45,10 +45,16 @@ struct AboutSettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 18)
             } footer: {
-                Text("MIT License with Commons Clause. Not affiliated with Anthropic.")
-                    .font(.footnote)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity)
+                VStack(spacing: 6) {
+                    Text("MIT License with Commons Clause. Not affiliated with Anthropic.")
+                    // The default sound is used under Riot Games' Legal Jibber Jabber policy, which asks for this notice.
+                    Text("The default sound is used under Riot Games' Legal Jibber Jabber policy. Wallflower isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.")
+                }
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
             }
         }
         .formStyle(.grouped)

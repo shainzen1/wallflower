@@ -24,6 +24,7 @@ final class AppSettings {
         var panelSide: PanelSide?
         var panelAutoHide: PanelAutoHide?
         var externalSessions: Bool?
+        var sound: SoundChoice?
     }
 
     /// `UserDefaults` keys.
@@ -43,6 +44,12 @@ final class AppSettings {
         static let externalSessions = "externalSessions"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let hiddenAgentTools = "hiddenAgentTools"
+        static let sound = "sound"
+        static let customSoundName = "customSoundName"
+        static let soundVolume = "soundVolume"
+        static let soundOnDone = "soundOnDone"
+        static let soundOnNeedsInput = "soundOnNeedsInput"
+        static let soundSkipsFrontmost = "soundSkipsFrontmost"
 
         /// Every appearance key ("Restore defaults" clears these).
         static let appearance = [faceStyle, faceFilter, colorMode, blobShapeMode, hoverEffect, gooRenderer, expandMode]
@@ -81,6 +88,30 @@ final class AppSettings {
     var hiddenAgentTools: Set<String> {
         didSet { defaults.set(hiddenAgentTools.sorted(), forKey: Key.hiddenAgentTools) }
     }
+    /// What plays when a session is done or needs input (Settings > Sound). Default: `Theme.sound`.
+    var sound: SoundChoice {
+        didSet { defaults.set(sound.storedName, forKey: Key.sound) }
+    }
+    /// The file name of the custom sound's copy in the sounds folder; nil until one was chosen.
+    var customSoundName: String? {
+        didSet { defaults.set(customSoundName, forKey: Key.customSoundName) }
+    }
+    /// Playback volume, 0 to 1. Default: `Theme.soundVolume`.
+    var soundVolume: Double {
+        didSet { defaults.set(soundVolume, forKey: Key.soundVolume) }
+    }
+    /// Whether a session turning to your turn plays the sound. Default: `Theme.soundOnDone` (on).
+    var soundOnDone: Bool {
+        didSet { defaults.set(soundOnDone, forKey: Key.soundOnDone) }
+    }
+    /// Whether a session starting to wait for input plays the sound. Default: `Theme.soundOnNeedsInput` (on).
+    var soundOnNeedsInput: Bool {
+        didSet { defaults.set(soundOnNeedsInput, forKey: Key.soundOnNeedsInput) }
+    }
+    /// "Not while the agent's app is in front". Default: `Theme.soundSkipsFrontmost` (on).
+    var soundSkipsFrontmost: Bool {
+        didSet { defaults.set(soundSkipsFrontmost, forKey: Key.soundSkipsFrontmost) }
+    }
     /// Set when the welcome window was finished or dismissed; until then it shows at launch.
     var hasCompletedOnboarding: Bool {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
@@ -107,6 +138,12 @@ final class AppSettings {
         externalSessions = overrides.externalSessions
             ?? (defaults.object(forKey: Key.externalSessions) as? Bool)
             ?? Theme.externalSessions
+        sound = overrides.sound ?? defaults.string(forKey: Key.sound).flatMap { SoundChoice(storedName: $0) } ?? Theme.sound
+        customSoundName = defaults.string(forKey: Key.customSoundName).flatMap { $0.isEmpty ? nil : $0 }
+        soundVolume = (defaults.object(forKey: Key.soundVolume) as? Double).map { min(max($0, 0), 1) } ?? Theme.soundVolume
+        soundOnDone = (defaults.object(forKey: Key.soundOnDone) as? Bool) ?? Theme.soundOnDone
+        soundOnNeedsInput = (defaults.object(forKey: Key.soundOnNeedsInput) as? Bool) ?? Theme.soundOnNeedsInput
+        soundSkipsFrontmost = (defaults.object(forKey: Key.soundSkipsFrontmost) as? Bool) ?? Theme.soundSkipsFrontmost
         hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
         hiddenAgentTools = Set(defaults.stringArray(forKey: Key.hiddenAgentTools) ?? [])
     }
@@ -129,6 +166,11 @@ final class AppSettings {
         gooRenderer = Theme.gooRenderer
         expandMode = Theme.expandMode
         Key.appearance.forEach(defaults.removeObject(forKey:))
+    }
+
+    /// The sound switches as the announcer reads them.
+    var soundOptions: SoundAnnouncer.Options {
+        SoundAnnouncer.Options(onDone: soundOnDone, onNeedsInput: soundOnNeedsInput, skipsFrontmost: soundSkipsFrontmost)
     }
 
     /// Whether every appearance value is the `Theme` default ("Restore defaults" is disabled then).
@@ -164,6 +206,22 @@ final class AppSettings {
         case Key.externalSessions:
             guard let value = Self.switchValue(name) else { return false }
             externalSessions = value
+            return true
+        case Key.sound:
+            guard let value = SoundChoice(storedName: name) else { return false }
+            sound = value
+            return true
+        case Key.soundVolume:
+            guard let value = Double(name), value.isFinite, (0...1).contains(value) else { return false }
+            soundVolume = value
+            return true
+        case Key.soundOnDone, Key.soundOnNeedsInput, Key.soundSkipsFrontmost:
+            guard let value = Self.switchValue(name) else { return false }
+            switch key {
+            case Key.soundOnDone: soundOnDone = value
+            case Key.soundOnNeedsInput: soundOnNeedsInput = value
+            default: soundSkipsFrontmost = value
+            }
             return true
         case Key.hasCompletedOnboarding:
             guard let value = Bool(name) else { return false }

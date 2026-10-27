@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// The Settings window: the classic macOS preferences look, a toolbar with one item per tab
-/// (General, Appearance, Agents, About), the window title following the tab, not resizable, its height
+/// (General, Appearance, Sound, Agents, About), the window title following the tab, not resizable, its height
 /// animating to fit each tab up to `maxContentHeight`, past which the tab scrolls. Each tab is a SwiftUI
 /// grouped `Form` in an `NSHostingController`.
 /// Created on demand and released when closed (`onClose`).
@@ -34,7 +34,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     ///   - showsAdvanced: open the Appearance tab's Advanced disclosure (`--settings-advanced`).
     init(
         settings: AppSettings, launchAtLogin: LaunchAtLogin, updater: AppUpdater? = nil, actions: SettingsActions, actionStore: ActionStore? = nil,
-        agents: AgentsModel? = nil, tab: SettingsTab = .general, showsAdvanced: Bool = false
+        agents: AgentsModel? = nil, sounds: SoundController? = nil, tab: SettingsTab = .general, showsAdvanced: Bool = false
     ) {
         let accessibility = AccessibilityAccess()
         let actionEditor = actionStore.map { ActionEditorModel(store: $0) }
@@ -53,6 +53,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         tabs.addTab(SettingsTab.appearance, content: AppearanceSettingsView(
             settings: settings, actions: actions, state: AppearanceViewState(showsAdvanced: showsAdvanced)
         ))
+        // Without a controller (tests), one whose folder does not exist: nothing is written unless a file is chosen.
+        let sounds = sounds ?? SoundController(settings: settings, folder: URL(filePath: "/nonexistent/Sounds", directoryHint: .isDirectory))
+        tabs.addTab(SettingsTab.sound, content: SoundSettingsView(settings: settings, sounds: sounds, state: SoundViewState()))
         tabs.addTab(SettingsTab.agents, content: AgentsSettingsView(model: agents, settings: settings))
         tabs.addTab(SettingsTab.about, content: AboutSettingsView(actions: actions))
         tabs.selectedTabViewItemIndex = SettingsTab.allCases.firstIndex(of: tab) ?? 0

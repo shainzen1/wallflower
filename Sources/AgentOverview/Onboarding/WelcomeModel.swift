@@ -112,7 +112,9 @@ final class WelcomeModel {
     }
 
     /// The welcome's agent list from the catalog: Claude Code, the agents found on this Mac (by
-    /// folder or app only), then ChatGPT greyed, since that is what people ask about first.
+    /// folder or app only), then ChatGPT greyed, since that is what people ask about first. Without
+    /// Codex on this Mac, Codex shows greyed above it with how to get it, so the ChatGPT line never
+    /// points at a box that isn't there.
     static func agentChoices(environment: AgentEnvironment) -> (choices: [AgentChoice], missing: [String]) {
         var choices = [AgentChoice(
             id: "claude", name: "Claude Code", kind: .builtIn,
@@ -131,11 +133,21 @@ final class WelcomeModel {
                 choices.append(AgentChoice(id: entry.id, name: entry.name, kind: .unavailable, note: entry.note))
             }
         }
+        let hasCodex = choices.contains { $0.tool == .codex }
+        if !hasCodex {
+            missing.removeAll { $0 == "Codex" }
+            choices.append(AgentChoice(id: "codex", name: "Codex", kind: .unavailable, note: Self.codexMissingNote))
+        }
         if let chatGPT = AgentCatalog.impossible.first {
-            choices.append(AgentChoice(id: chatGPT.id, name: "ChatGPT", kind: .unavailable, note: chatGPT.reason))
+            choices.append(AgentChoice(id: chatGPT.id, name: "ChatGPT", kind: .unavailable, note: hasCodex ? chatGPT.reason : Self.chatGPTWithoutCodexNote))
         }
         return (choices, missing)
     }
+
+    /// Codex greyed: not on this Mac yet.
+    static let codexMissingNote = "Not found on this Mac. Install the Codex CLI or the ChatGPT app, then connect it in Settings > Agents."
+    /// ChatGPT greyed while Codex isn't installed either.
+    static let chatGPTWithoutCodexNote = "ChatGPT doesn't share chat status with other apps. Codex does, once it's installed."
 
     func isPicked(_ tool: AgentTool) -> Bool {
         pickedAgents.contains(tool)

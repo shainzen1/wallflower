@@ -242,6 +242,21 @@ enum Theme {
     /// "Sessions from other tools"; `docs/external-sessions.md`). Default on: the folder is empty unless a tool writes there.
     static let externalSessions = true
 
+    // MARK: Sound (Settings > Sound)
+
+    /// What plays when a session is done or needs input: the bundled "Wallflower ping".
+    static let sound: SoundChoice = .wallflowerPing
+    /// Playback volume, 0 to 1.
+    static let soundVolume: Double = 0.7
+    /// Whether a session turning to your turn (done) plays the sound.
+    static let soundOnDone = true
+    /// Whether a session starting to wait for input plays the sound.
+    static let soundOnNeedsInput = true
+    /// Whether the sound stays quiet while the session's own app is frontmost (when Wallflower knows it).
+    static let soundSkipsFrontmost = true
+    /// Transitions this close after a played sound play nothing more.
+    static let soundCollapseWindow: TimeInterval = 1
+
     // MARK: New session button (the control at the top of the column)
 
     /// Whether the new session button shows at the top of the column (Settings > General overrides it).

@@ -4,6 +4,16 @@ All notable changes to Wallflower are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions have two parts from 1.4 on (1.4, 1.5, ...); the releases before it were 0.1.0 to 0.1.3.
 
+## [1.5] - 2026-10-27
+
+### Added
+
+- A sound when an agent is done or needs input, so you no longer need a hook script of your own for it. **Settings > Sound** picks the Wallflower ping (the default), a macOS sound, your own file of up to 5 seconds, or none, sets the volume, and has a switch for each moment. By default it stays quiet while the agent's app is in front.
+
+### Fixed
+
+- The welcome tour's agent page no longer tells you to connect Codex when Codex isn't on your Mac: Codex shows greyed with how to install it, and the ChatGPT line says Codex works once it's installed.
+
 ## [1.4] - 2026-10-23
 
 ### Added
@@ -93,6 +103,7 @@ The first public release.
 
 - The welcome's Set up page keeps the "Where do you run Claude Code?" choice and the Launch at login switch inside their card.
 
+[1.5]: https://github.com/shainzen1/wallflower/compare/v1.4...v1.5
 [1.4]: https://github.com/shainzen1/wallflower/compare/v0.1.3...v1.4
 [0.1.3]: https://github.com/shainzen1/wallflower/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/shainzen1/wallflower/compare/v0.1.1...v0.1.2

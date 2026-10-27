@@ -4,12 +4,13 @@ import ServiceManagement
 
 /// The tabs of the Settings window.
 enum SettingsTab: String, CaseIterable, Sendable {
-    case general, appearance, agents, about
+    case general, appearance, sound, agents, about
 
     var title: String {
         switch self {
         case .general: "General"
         case .appearance: "Appearance"
+        case .sound: "Sound"
         case .agents: "Agents"
         case .about: "About"
         }
@@ -20,6 +21,7 @@ enum SettingsTab: String, CaseIterable, Sendable {
         switch self {
         case .general: "gearshape"
         case .appearance: "paintpalette"
+        case .sound: "speaker.wave.2"
         case .agents: "person.2"
         case .about: "info.circle"
         }

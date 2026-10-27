@@ -1,6 +1,6 @@
 # Third-party notices
 
-Wallflower's own code is under the MIT License with Commons Clause (see [LICENSE](LICENSE)). The app bundle also contains the software below, under its own license. Its license text ships inside the app too, in `Wallflower.app/Contents/Resources/Sparkle-LICENSE.txt`.
+Wallflower's own code is under the MIT License with Commons Clause (see [LICENSE](LICENSE)). The app bundle also contains the software below, under its own license. Its license text ships inside the app too, in `Wallflower.app/Contents/Resources/Sparkle-LICENSE.txt`. It also contains the default notification sound, under the terms at the end of this file.
 
 ## Sparkle
 
@@ -142,3 +142,9 @@ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
 IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## Default notification sound
+
+The default notification sound, "Wallflower ping" (`Packaging/Sounds/ping.wav`, in the app at `Contents/Resources/ping.wav`), is used under Riot Games' ["Legal Jibber Jabber" policy](https://www.riotgames.com/en/legal) for fan projects. It is not covered by Wallflower's MIT License with Commons Clause, and it may not be reused outside Wallflower.
+
+Wallflower isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.

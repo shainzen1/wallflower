@@ -45,6 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var model: PanelModel!
     /// Sessions thrown out of the capsule (`hiddenSessionPids`).
     private(set) var hiddenSessions: HiddenSessions!
+    /// The notification sound (Settings > Sound), fed by the store's state changes.
+    private(set) var sounds: SoundController!
     /// Slides the panel off its edge and back (Settings > General > Hide the panel).
     private var autoHide: AutoHideController?
     /// The pointer monitors while the pointer holds the auto-hidden panel out (`watchPointer`).
@@ -81,6 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         actionStore.start()
         let hiddenSessions = HiddenSessions(defaults: defaults)
         self.hiddenSessions = hiddenSessions
+        let sounds = SoundController(settings: settings, folder: arguments.soundsFolder ?? SoundLibrary.defaultFolder)
+        sounds.hiddenSessions = hiddenSessions
+        sounds.watch(store)
+        self.sounds = sounds
+        runScriptedSoundFile()
         self.store = store
         self.actionStore = actionStore
 
@@ -104,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.runScriptedGlide()
             self?.runScriptedAction()
             self?.runScriptedSettings()
+            self?.runScriptedSound()
             self?.logMenuIfAsked()
             self?.runWelcomeKeys()
             self?.runScriptedSnapshot()
@@ -272,6 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.stop()
         let store = makeStore(for: appliedSource)
         store.onFirstScan = { [weak self] _ in self?.installDeferredContent() }
+        sounds.watch(store)
         self.store = store
         store.start()
     }
@@ -366,7 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             agents.showsImpossible = arguments.settingsAdvanced
             let controller = SettingsWindowController(
                 settings: settings, launchAtLogin: launchAtLogin, updater: updater, actions: settingsActions, actionStore: actionStore,
-                agents: agents, tab: tab ?? .general,
+                agents: agents, sounds: sounds, tab: tab ?? .general,
                 showsAdvanced: arguments.settingsAdvanced
             )
             controller.onClose = { [weak self] in
@@ -665,6 +674,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: `--set`
 
     /// Changes the `--set` settings one second after the first scan, as Settings would.
+    /// `--sound-file`: installs the file as the custom sound, as Choose File… would, and logs the outcome.
+    private func runScriptedSoundFile() {
+        guard let url = arguments.soundFile else { return }
+        let problem = sounds.installCustomSound(from: url)
+        NSLog("\(AppInfo.name): --sound-file: %@", problem?.message ?? "installed as \(settings.customSoundName ?? "?")")
+    }
+
+    /// `--play-sound`: plays the chosen sound once, as Preview does, and logs whether it played.
+    private func runScriptedSound() {
+        guard arguments.playSound else { return }
+        let played = sounds.play()
+        NSLog("\(AppInfo.name): --play-sound %@ at %d%%: %@", settings.sound.storedName, Int((settings.soundVolume * 100).rounded()), played ? "played" : "silent")
+    }
+
     private func runScriptedSettings() {
         let changes = arguments.scriptedSettings
         guard !changes.isEmpty else { return }

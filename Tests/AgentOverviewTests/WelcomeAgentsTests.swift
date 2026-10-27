@@ -29,6 +29,17 @@ struct WelcomeAgentsTests {
         #expect(TestHome.tree(environment.home).allSatisfy { !$0.contains("hooks") }, "detection writes nothing")
     }
 
+    @Test func withoutCodexTheChatGPTLineSaysHowToGetIt() throws {
+        let environment = try TestHome.make(folders: [".claude", ".copilot"])
+        defer { TestHome.remove(environment) }
+        let (choices, missing) = WelcomeModel.agentChoices(environment: environment)
+        let codex = try #require(choices.first { $0.id == "codex" })
+        #expect(codex.kind == .unavailable && codex.note == WelcomeModel.codexMissingNote)
+        #expect(!missing.contains("Codex"), "named once, in its own row")
+        #expect(choices.last?.name == "ChatGPT" && choices.last?.note == WelcomeModel.chatGPTWithoutCodexNote)
+        #expect(choices.dropLast().last?.id == "codex", "right above ChatGPT")
+    }
+
     @Test func startWithAgentsConfirmsFirst() {
         let model = WelcomeModel(page: WelcomeModel.pageCount, sessionSource: .desktop, launchAtLogin: false)
         let plan = ChangePlan(tool: .cursor, changes: [FileChange(url: URL(filePath: "/x/.cursor/hooks.json"), before: nil, after: Data("{}".utf8))])

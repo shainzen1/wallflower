@@ -9,6 +9,16 @@ struct LaunchArguments {
     var externalSessionsFolder: URL?
     /// `--external-sessions <on|off>`: show sessions from other tools or not, overriding the stored setting.
     var externalSessions: Bool?
+    /// `--sounds-folder <path>`: keep the custom sound's copy in this folder instead of
+    /// `~/Library/Application Support/Wallflower/Sounds`.
+    var soundsFolder: URL?
+    /// `--sound <wallflower|custom|off|<system sound name>>`: the notification sound, overriding the stored setting.
+    var sound: SoundChoice?
+    /// `--sound-file <path>`: right after launch, install this file as the custom sound, as Choose
+    /// File… would (checks, copy into the sounds folder), and log the result. Meant for `--sounds-folder` runs.
+    var soundFile: URL?
+    /// `--play-sound`: after the first scan, play the chosen sound once at the chosen volume and log it.
+    var playSound = false
     /// `--tools-home <dir>`: detect and connect agents in this folder instead of the home folder (its
     /// `.codex`, `.gemini`, ... and `Applications`), keep Wallflower's side of it (helper, backups,
     /// manifest) inside it too, and read external sessions from its sessions folder unless
@@ -81,7 +91,7 @@ struct LaunchArguments {
         defaultsSuite == nil ? nil : fakePendingUpdate
     }
 
-    /// `--show-settings <general|appearance|agents|about>`: open the Settings window on that tab at launch.
+    /// `--show-settings <general|appearance|sound|agents|about>`: open the Settings window on that tab at launch.
     var showSettings: SettingsTab?
     /// `--welcome-keys <return,escape,...>`: with `--welcome`, press these keys in the welcome window one
     /// after the other (key equivalents first, as AppKit dispatches them), log the page after each, then quit.
@@ -306,7 +316,8 @@ struct LaunchArguments {
         AppSettings.Overrides(
             sessionSource: sessionSource, faceStyle: faceStyle, faceFilter: faceFilter, colorMode: colorMode,
             blobShapeMode: blobShapeMode, hoverEffect: hoverEffect, gooRenderer: gooRenderer, expandMode: expandMode,
-            actionLauncher: actionLauncher, panelSide: panelSide, panelAutoHide: panelAutoHide, externalSessions: externalSessions
+            actionLauncher: actionLauncher, panelSide: panelSide, panelAutoHide: panelAutoHide, externalSessions: externalSessions,
+            sound: sound
         )
     }
 
@@ -320,6 +331,13 @@ struct LaunchArguments {
                 if let path = iterator.next() { externalSessionsFolder = URL(filePath: path, directoryHint: .isDirectory) }
             case "--external-sessions":
                 if let text = iterator.next() { externalSessions = AppSettings.switchValue(text) }
+            case "--sounds-folder":
+                if let path = iterator.next() { soundsFolder = URL(filePath: path, directoryHint: .isDirectory) }
+            case "--sound":
+                if let text = iterator.next() { sound = SoundChoice(storedName: text) }
+            case "--sound-file":
+                if let path = iterator.next() { soundFile = URL(filePath: path, directoryHint: .notDirectory) }
+            case "--play-sound": playSound = true
             case "--tools-home":
                 if let path = iterator.next() { toolsHome = URL(filePath: path, directoryHint: .isDirectory) }
             case "--agent-sheet":
