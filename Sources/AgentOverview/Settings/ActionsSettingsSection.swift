@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 
 /// The Actions section of Settings > General: the list of action faces with add, remove and reorder,
-/// a sheet that edits one action, a small link to the JSON file, and the launcher choice. The logic
+/// a sheet that edits one action, a small link to the JSON file, the setup prompt to copy for a coding
+/// agent (`ActionSetupPrompt`), and the launcher choice. The logic
 /// lives in `ActionEditorModel`.
 struct ActionsSettingsSection: View {
     @Bindable var settings: AppSettings
@@ -23,6 +24,14 @@ struct ActionsSettingsSection: View {
                 Text("Start a new Claude session with a saved prompt.")
             }
             if let editor {
+                LabeledContent {
+                    CopySetupPromptButton(fileURL: editor.store.fileURL, feedback: editor.setupPromptFeedback)
+                        // Text only, like the other Settings buttons; the welcome's pill shows the icon.
+                        .labelStyle(.titleOnly)
+                } label: {
+                    Text("Set up with an agent")
+                    Text("Paste it into Claude Code or any coding agent to set up actions with its help.")
+                }
                 ActionListView(model: editor, launcher: settings.actionLauncher)
             }
         } header: {

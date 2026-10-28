@@ -40,12 +40,15 @@ struct WelcomeStatusLegend: View {
 }
 
 /// "Action faces": a session face and an action face as the capsule stacks them (sessions, a thin
-/// line, actions), each named, then what a click does and where to add one. One left edge runs
-/// through it all: the gesture tiles sit centred under the capsule, their sentences start where the
-/// names do.
+/// line, actions), each named, then what a click does and the two ways to set one up: Settings, or
+/// a coding agent with the copied setup prompt (`ActionSetupPrompt`). One left edge runs through it
+/// all: the gesture tiles sit centred under the capsule, their sentences start where the names do.
 struct WelcomeActionsPage: View {
     /// The look picked on "Pick a look"; the action face is lavender in every look.
     var look: PanelLook
+    /// The actions file the setup prompt names.
+    var actionsFile: URL
+    var copyFeedback: CopyFeedback
 
     private static let faceSize: CGFloat = 34
     /// The piece of capsule around the faces: its width, and the room above and below them.
@@ -72,14 +75,19 @@ struct WelcomeActionsPage: View {
                     // Level with the faces inside the capsule.
                     .padding(.vertical, Self.capsulePadding)
                 }
-                VStack(alignment: .leading, spacing: 12) {
+                // Three rows: tighter than "Hover, click, drag", so the page keeps its room above the buttons.
+                VStack(alignment: .leading, spacing: 10) {
                     WelcomeGestureRow(symbol: "cursorarrow.click.2", text: "Click it to start a new session with that prompt.")
                     WelcomeGestureRow(symbol: "plus", text: "Add yours in Settings > General > Actions.")
+                    WelcomeGestureRow(symbol: "terminal", text: "Or let your coding agent set them up:") {
+                        CopySetupPromptButton(fileURL: actionsFile, feedback: copyFeedback)
+                            .buttonStyle(WelcomePillButtonStyle())
+                    }
                 }
                 .padding(.leading, (Self.capsuleWidth - Self.gestureTile) / 2)
-                .padding(.top, 26)
+                .padding(.top, 20)
             }
-            .padding(.top, 26)
+            .padding(.top, 22)
         }
     }
 

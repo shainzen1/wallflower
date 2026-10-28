@@ -441,6 +441,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onPlaySound = { [weak self] in self?.sounds.play() }
         let connector = AgentConnector(environment: agentEnvironment)
         model.agentsHome = agentEnvironment.home
+        model.actionsFile = actionStore.fileURL
         model.planAgents = { tools in
             tools.sorted { $0.rawValue < $1.rawValue }.map { tool in
                 do {

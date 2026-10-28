@@ -130,6 +130,10 @@ final class WelcomeModel {
     @ObservationIgnored var onPlaySound: (() -> Void)?
     /// The home the agents' paths are shown relative to (`~/.codex/hooks.json`).
     @ObservationIgnored var agentsHome = FileManager.default.homeDirectoryForCurrentUser
+    /// The actions file "Action faces" copies the setup prompt for (`--actions-file` honoured by the owner).
+    @ObservationIgnored var actionsFile = ActionStore.defaultFileURL
+    /// "Copy Setup Prompt" on "Action faces".
+    @ObservationIgnored let setupPromptFeedback = CopyFeedback()
     /// Plans Connect for the ticked agents (the owner reads their files only now).
     @ObservationIgnored var planAgents: (Set<AgentTool>) -> [AgentPlanItem] = { _ in [] }
     @ObservationIgnored private(set) var isFinished = false

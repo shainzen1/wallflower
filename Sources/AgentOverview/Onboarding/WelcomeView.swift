@@ -53,7 +53,7 @@ struct WelcomeView: View {
         case .look: pickALook.topAligned()
         case .sound: WelcomeSoundPage(model: model, look: welcomeLook).topAligned()
         case .gestures: hoverClickDrag.topAligned()
-        case .actions: WelcomeActionsPage(look: chosenLook).topAligned()
+        case .actions: WelcomeActionsPage(look: chosenLook, actionsFile: model.actionsFile, copyFeedback: model.setupPromptFeedback).topAligned()
         case .agents: WelcomeAgentsPage(model: model).topAligned()
         case .setUp: setUp.topAligned()
         }
@@ -410,10 +410,12 @@ struct WelcomeHairline: View {
     }
 }
 
-/// One line of "Hover, click, drag" and "Action faces": a symbol on a soft tile, one sentence.
-struct WelcomeGestureRow: View {
+/// One line of "Hover, click, drag" and "Action faces": a symbol on a soft tile, one sentence, and
+/// optionally a control after it ("Copy Setup Prompt").
+struct WelcomeGestureRow<Accessory: View>: View {
     let symbol: String
     let text: String
+    @ViewBuilder var accessory: () -> Accessory
 
     var body: some View {
         HStack(spacing: 16) {
@@ -427,7 +429,15 @@ struct WelcomeGestureRow: View {
             Text(text)
                 .font(.system(size: 15))
                 .foregroundStyle(.white.opacity(0.88))
+            accessory()
+                .padding(.leading, -4)
         }
+    }
+}
+
+extension WelcomeGestureRow where Accessory == EmptyView {
+    init(symbol: String, text: String) {
+        self.init(symbol: symbol, text: text) { EmptyView() }
     }
 }
 

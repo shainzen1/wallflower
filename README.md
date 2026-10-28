@@ -80,7 +80,7 @@ mv build/Wallflower.app /Applications/
 - **Sound:** when an agent is done or needs input, Wallflower plays a short ping, so you need no hook script of your own. **Settings > Sound** picks the Wallflower ping, a macOS sound, your own file (dropped on the row or chosen) or none, sets the volume, and keeps it quiet while that agent's app is in front.
 - **Menu bar:** the blob icon shows a status line and your sessions (click one to open it), plus Show hidden sessions, Hide panel, Reset position, Settings… (⌘,), Check for Updates…, Show welcome… and Quit.
 - **Settings:**
-  - *General:* Launch at login. Check for updates automatically (about once an hour) and Check Now. Show sessions from the Claude app, from terminals and editors, or everywhere, and sessions from other tools (on or off, see below). New session button (on or off). Panel side (Left or Right), Reset position, and Hide the panel (Never, When nothing is running, or Always). Your actions (add, edit, reorder, remove), where actions run (Terminal or the Claude app) and, for the Claude app, permission to send the prompt (see below).
+  - *General:* Launch at login. Check for updates automatically (about once an hour) and Check Now. Show sessions from the Claude app, from terminals and editors, or everywhere, and sessions from other tools (on or off, see below). New session button (on or off). Panel side (Left or Right), Reset position, and Hide the panel (Never, When nothing is running, or Always). Your actions (add, edit, reorder, remove, or copy a setup prompt for a coding agent), where actions run (Terminal or the Claude app) and, for the Claude app, permission to send the prompt (see below).
   - *Appearance:* a live preview. Face (Blob or Dot matrix), Screen filter, Colour (Status, Project, Per session), Shape, Hover (Magnify, Stretch, None). Under Advanced: Goo (Liquid or Crisp), Expand (the row or the whole column) and a face playground.
   - *Agents:* Claude Code (built in), every other agent found on this Mac with Connect, Show, Show changes, Reveal file and Disconnect, the ones not installed and the ones that can't work (with why), and Disconnect all. See [Other agents](#other-agents).
   - *About:* version, links and the welcome tour.
@@ -98,6 +98,12 @@ Wallflower ships with no actions; you set up your own in **Settings > General > 
 - **−** removes the selected action. The arrow buttons move it up or down, or drag it onto another row. The capsule shows the actions in the same order.
 - The **M T W T F S S** toggles pick the weekdays a face shows on. With all seven on it shows every day; the last day that is on can't be turned off.
 - **Model** and **Effort** pick what the session starts with, so a routine prompt can run on a cheaper model. **Default** leaves the choice to Claude Code; **Custom…** takes a full model id. They apply when actions run in Terminal; the Claude app ignores them.
+
+### Set up actions with a coding agent
+
+Rather describe your actions than fill in the form? Click **Copy Setup Prompt** above the list in **Settings > General > Actions** (or on the welcome tour's "Action faces" page) and paste it into Claude Code, Codex or any coding agent. The prompt explains actions, names your actions file and its fields, and asks the agent to read the file first, keep your existing actions, ask you which actions and folders you want, check that the folders exist, back the file up and write valid JSON. The new faces show up as soon as the agent saves the file.
+
+### The actions file
 
 Actions live in `~/Library/Application Support/Wallflower/actions.json`, which starts as an empty list (`[]`). The editor reads and writes this file, so the two never disagree. **Edit JSON…** in the same section opens it in your text editor, for the extra fields below. Changes apply as soon as you save; if the file has a mistake, Wallflower keeps the last version that worked.
 

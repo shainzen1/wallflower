@@ -4,6 +4,12 @@ All notable changes to Wallflower are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions have two parts from 1.4 on (1.4, 1.5, ...); the releases before it were 0.1.0 to 0.1.3.
 
+## [1.7] - 2026-10-28
+
+### Added
+
+- **Copy Setup Prompt** in Settings > General > Actions and on the welcome tour's action page: paste it into Claude Code or any coding agent, and it helps you set up your actions by editing the actions file for you.
+
 ## [1.6] - 2026-10-27
 
 ### Added
@@ -114,6 +120,7 @@ The first public release.
 
 - The welcome's Set up page keeps the "Where do you run Claude Code?" choice and the Launch at login switch inside their card.
 
+[1.7]: https://github.com/shainzen1/wallflower/compare/v1.6...v1.7
 [1.6]: https://github.com/shainzen1/wallflower/compare/v1.5...v1.6
 [1.5]: https://github.com/shainzen1/wallflower/compare/v1.4...v1.5
 [1.4]: https://github.com/shainzen1/wallflower/compare/v0.1.3...v1.4

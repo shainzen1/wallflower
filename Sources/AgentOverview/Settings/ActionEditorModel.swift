@@ -172,6 +172,8 @@ final class ActionEditorModel {
 
     /// Home folder for `~` (tests inject one).
     @ObservationIgnored let home: String
+    /// "Copy Setup Prompt" above the list.
+    @ObservationIgnored let setupPromptFeedback = CopyFeedback()
 
     /// Placeholder name of an action whose name was cleared (the list never shows an empty line).
     static let untitled = "Untitled action"
@@ -292,7 +294,7 @@ final class ActionEditorModel {
     }
 
     /// `path` with the home folder written as `~`.
-    static func displayPath(_ path: String, home: String) -> String {
+    nonisolated static func displayPath(_ path: String, home: String) -> String {
         var home = home
         while home.count > 1, home.hasSuffix("/") { home.removeLast() }
         if path == home { return "~" }
